@@ -2,13 +2,16 @@ from enum import Enum, auto
 from tqdm import tqdm
 import torch
 import matplotlib.pyplot as plt
+import os
+import json
+from torchmetrics.functional.classification import binary_f1_score
 
 class SaveMode(Enum):
     CHECKPOINT = auto()
-    JUST_MODEL = auto()
+    JUST_MODEL_AND_METRICS = auto()
 
 class Train_Loop():
-    def __init__(self, save_dir, device='cpu', plot_freq=2, autosave_freq=10, patience=10):
+    def __init__(self, save_dir, epochs, device='cpu', plot_freq=3, autosave_freq=10, patience=10):
         """
         Initializes a new TrainLoop instance.
 
@@ -25,20 +28,22 @@ class Train_Loop():
         self.autosave_freq = autosave_freq 
         self.patience = patience
         self.save_dir = save_dir
+        self.epochs = epochs
+        self.curr_epoch = 0 
 
 
         #plotting metrics
         self.lossi = []
         self.devlossi = []
         self.testlossi = []
-        self.trainf1i = []
+        self.f1i = []
         self.devf1i = []
         self.testf1i = []
 
-        self.moving_mean_lossi = []
-        self.moving_mean_devlossi = []
-        self.moving_mean_trainf1i = []
-        self.moving_mean_devf1i = []
+        self.moving_mean_lossi = torch.tensor([]) 
+        self.moving_mean_devlossi = torch.tensor([]) 
+        self.moving_mean_f1i = torch.tensor([]) 
+        self.moving_mean_devf1i = torch.tensor([]) 
 
         self.best_loss = float('inf')
         self.best_dev_loss = float('inf')
@@ -50,26 +55,27 @@ class Train_Loop():
         self.best_f1_idx = None
         self.best_dev_f1_idx = None
 
-        self.curr_epoch = 0 
 
-
-        
         # early stopping
         self.epochs_without_improvement = 0
-        self.best_model_state = None
+        # self.best_model_state = None
+
 
     def train(self, model, train_loader, dev_loader, test_loader, optimizer, criterion):
-        if self.has_run:
-            print("ERROR: The training loop has already ruun for this object.\nYou need to re __init__ a training loop if you wish to train.\nTrainLoop obj can't be reused")
+        assert not self.has_run, "Training loop already executed. Create new instance."
+        assert self.epochs > 0, "epochs must be positive"
         
         self.has_run = True # to prevent for running the loop again without inilalizing the params again
 
-        for epoch in tqdm(self.epochs):
+        pbar = tqdm(range(self.epochs))
+        for epoch in pbar:
             self.curr_epoch = epoch + 1
             
             #TRAIN
             model.train()
             total_loss = 0.0
+            total_f1 = 0.0
+
             for X_batch, y_batch in train_loader:
                 X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
                 optimizer.zero_grad()
@@ -78,39 +84,59 @@ class Train_Loop():
                 loss.backward()
                 optimizer.step()
                 total_loss += loss.item()
+                total_f1 += binary_f1_score(pred.cpu(), y_batch.cpu()) #we assume (Batch x Seq Len)
 
             self.lossi.append(total_loss / len(train_loader)) #append avg loss over train  batches
+            self.f1i.append(total_f1 / len(train_loader)) #append avg f1 over train  batches
+
 
             #DEV 
             model.eval()
             total_dev_loss = 0.0
+            total_dev_f1 = 0.0
             with torch.no_grad():
-                for dev_X_batch , y_dev_batch in dev_loader:
+                for dev_X_batch , dev_y_batch in dev_loader:
                     dev_X_batch, dev_y_batch = dev_X_batch.to(self.device), dev_y_batch.to(self.device)
                     dev_pred = model(dev_X_batch)
-                    dev_loss = criterion(dev_pred ,y_dev_batch)
+                    dev_loss = criterion(dev_pred, dev_y_batch)
                     total_dev_loss += dev_loss.item()
+                    total_dev_f1 += binary_f1_score(dev_pred.cpu(), dev_y_batch.cpu()) #we assume (Batch x Seq Len)
+
 
                 self.devlossi.append(total_dev_loss / len(dev_loader)) #append avg loss over dev  batches
+                self.devf1i.append(total_dev_f1 / len(dev_loader)) #append avg f1 over dev  batches
+
 
             #TEST
             total_test_loss = 0.0
+            total_test_f1 = 0.0
             with torch.no_grad():
-                for test_X_batch , y_test_batch in test_loader:
-                    _X_batch, _y_batch = _X_batch.to(self.device), _y_batch.to(self.device)
+                for test_X_batch , test_y_batch in test_loader:
+                    test_X_batch, test_y_batch = test_X_batch.to(self.device), test_y_batch.to(self.device)
                     test_pred = model(test_X_batch)
-                    test_loss = criterion(test_pred ,y_test_batch)
+                    test_loss = criterion(test_pred, test_y_batch)
                     total_test_loss += test_loss.item()
+                    total_test_f1 += binary_f1_score(test_pred.cpu(), test_y_batch.cpu()) #we assume (Batch x Seq Len)
 
-                self.devlossi.append(total_test_loss / len(test_loader)) #append avg loss over test  batches
+
+                self.testlossi.append(total_test_loss / len(test_loader)) #append avg loss over test  batches
+                self.testf1i.append(total_test_f1 / len(test_loader)) #append avg f1 over test  batches
+
 
 
             # UPDATES
+            self._update_best_metrics()
             self._update_early_stop()
 
+            pbar.set_description(f"Loss: {self.lossi[-1]:.4f}, Dev Loss: {self.devlossi[-1]:.4f}")
+            
             # CHECKS
+            if self._is_best():
+                self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, name='best_dev_')
+
             if self._should_plot():
                 self._do_plot()
+
 
             if self._should_early_stop():
                 self._do_early_stop(model=model)
@@ -119,37 +145,55 @@ class Train_Loop():
 
             if self._should_autosave():
                 self._do_auto_save(model=model, optimizer=optimizer)
+
+            
         
 
         #PLOT ON END
         self._do_plot()
 
-
-    def _update_early_stop(self):
+    def _update_best_metrics(self):
+        # Update best values
+        if self.lossi[-1] < self.best_loss:
+            self.best_loss = self.lossi[-1]
+            self.best_loss_idx = len(self.lossi) - 1
+            
         if self.devlossi[-1] < self.best_dev_loss:
             self.best_dev_loss = self.devlossi[-1]
+            self.best_dev_loss_idx = len(self.devlossi) - 1
+            
+        if self.f1i[-1] > self.best_f1:
+            self.best_f1 = self.f1i[-1]
+            self.best_f1_idx = len(self.f1i) - 1
+            
+        if self.devf1i[-1] > self.best_dev_f1:
+            self.best_dev_f1 = self.devf1i[-1]
+            self.best_dev_f1_idx = len(self.devf1i) - 1
+
+
+    def _update_early_stop(self):
+        if self.devlossi[-1] == self.best_dev_loss: #we assume if == then its becasue it was jsut updated to be best metric
             self.epochs_without_improvement = 0
         else:
             self.epochs_without_improvement += 1
 
     #only call when need for plotting it is expensive
-    def _update_plotting_metrics(self):
+    def _update_plotting_metrics(self, kernel_size = 3):
         
-        # find best values
-        best_dev_loss = min(dev_lossi)
-        best_loss = min(lossi)
+        if self.curr_epoch >= kernel_size:
+            # calc moving avgs
+            lossi_tensor = torch.tensor(self.lossi, dtype=torch.float32)
+            devlossi_tensor = torch.tensor(self.devlossi, dtype=torch.float32)
+            f1i_tensor = torch.tensor(self.f1i, dtype=torch.float32)
+            devf1i_tensor = torch.tensor(self.devf1i, dtype=torch.float32)
 
-        best_dev_f1i= max(devf1i)
-        best_f1i = max(f1i)
+            self.moving_mean_lossi =  torch.nn.functional.avg_pool1d(lossi_tensor.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
+            self.moving_mean_devlossi = torch.nn.functional.avg_pool1d(devlossi_tensor.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
+            self.moving_mean_f1i = torch.nn.functional.avg_pool1d(f1i_tensor.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
+            self.moving_mean_devf1i = torch.nn.functional.avg_pool1d(devf1i_tensor.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
 
-        # find best value idxs
-
-
-        # calc moving avgs
-        
-
-
-
+    def _is_best(self):
+        return self.devlossi[-1] == self.best_dev_loss 
 
     def _should_early_stop(self):
         return self.epochs_without_improvement > self.patience
@@ -168,9 +212,9 @@ class Train_Loop():
         plt.subplot(2, 1, 1)
 
         plt.plot(self.lossi, color="#346beb", label=f'Train Loss; min={self.best_loss:0.4f}' )
-        plt.plot(self.dev_lossi, color="#eb7734", label=f'Dev Loss; min={self.best_dev_loss:0.4f}')
-        plt.plot(self.lossi_mean.squeeze(), alpha=0.55, color="#346beb");
-        plt.plot(self.devlossi_mean.squeeze(), alpha=0.55, color="#eb7734"); 
+        plt.plot(self.devlossi, color="#eb7734", label=f'Dev Loss; min={self.best_dev_loss:0.4f}')
+        plt.plot(self.moving_mean_lossi, alpha=0.55, color="#346beb");
+        plt.plot(self.moving_mean_devlossi, alpha=0.55, color="#eb7734"); 
 
 
         plt.scatter(self.best_loss_idx, self.best_loss, color="black", s=20, marker='v', zorder=6 )
@@ -187,8 +231,8 @@ class Train_Loop():
 
         plt.plot(self.f1i, color="#346beb", label=f'Train F1; max={self.best_f1i:0.2f}' )
         plt.plot(self.devf1i, color="#eb7734", label=f'Dev F1; max={self.best_dev_f1i:0.2f}')
-        plt.plot(self.f1i_mean.squeeze(), alpha=0.55, color="#346beb");
-        plt.plot(self.devf1i_mean.squeeze(), alpha=0.55, color="#eb7734"); 
+        plt.plot(self.moving_mean_f1i, alpha=0.55, color="#346beb");
+        plt.plot(self.moving_mean_devf1i , alpha=0.55, color="#eb7734"); 
 
 
         plt.scatter(self.best_f1_idx, self.best_f1i, color="black", s=20, marker='v', zorder=6 )
@@ -200,26 +244,41 @@ class Train_Loop():
         plt.legend()
 
         plt.tight_layout()
+        plt.savefig(os.path.join(self.save_dir,f"metrics.png"))
+        plt.close()
 
     def _do_early_stop(self, model):
         print(f"Early stopping at epoch {self.curr_epoch}")
-        self._save(model=model, mode=SaveMode.JUST_MODEL, optimizer=None)
+        self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, optimizer=None)
 
     def _do_auto_save(self, model, optimizer):
-        self.save(model=model, optimizer=optimizer, mode=SaveMode.CHECKPOINT)
+        self._save(model=model, optimizer=optimizer, mode=SaveMode.CHECKPOINT)
 
-
-    def _save(self, model, mode: SaveMode, optimizer=None):
+    def _save(self, model, mode: SaveMode, optimizer=None, name=''):
             if mode == SaveMode.CHECKPOINT:
                 checkpoint = {
                     'epoch': self.curr_epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
-                    'train_losses': self.lossi,
-                    'dev_losses': self.devlossi,
-                    'best_dev_loss': self.best_dev_loss
+                    'lossi': self.lossi,
+                    'devlossi': self.devlossi,
+                    'testlossi': self.testlossi,
+                    'f1i': self.f1i,
+                    'devf1i': self.devf1i,
+                    'testf1i': self.testf1i
                 }
-                torch.save(checkpoint, f"{self.save_dir}/checkpoint_epoch_{self.curr_epoch}.pt")
+                torch.save(checkpoint, f"{self.save_dir}/{name}checkpoint_epoch_{self.curr_epoch}.pt")
 
-            elif mode == SaveMode.JUST_MODEL:
-                torch.save(model.state_dict(), f"{self.save_dir}/model_at_{self.curr_epoch}.pt")
+            elif mode == SaveMode.JUST_MODEL_AND_METRICS:
+                torch.save(model.state_dict(), f"{self.save_dir}/{name}model_at_{self.curr_epoch}.pt")
+                metrics = {
+                    'epoch': self.curr_epoch,
+                    'lossi': self.lossi,
+                    'devlossi': self.devlossi,
+                    'testlossi': self.testlossi,
+                    'f1i': self.f1i,
+                    'devf1i': self.devf1i,
+                    'testf1i': self.testf1i
+                }
+                with open(f"{self.save_dir}/{name}metrics_epoch_{self.curr_epoch}.json", 'w') as f:
+                    json.dump(metrics, f, indent=2)
