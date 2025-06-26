@@ -4,7 +4,7 @@ import torch
 import matplotlib.pyplot as plt
 import os
 import json
-from torchmetrics.functional.classification import binary_f1_score
+from torchmetrics.classification import BinaryF1Score
 
 class SaveMode(Enum):
     CHECKPOINT = auto()
@@ -61,6 +61,11 @@ class Train_Loop():
         # self.best_model_state = None
 
 
+        self.train_f1 = BinaryF1Score().to(device)
+        self.dev_f1 = BinaryF1Score().to(device)
+        self.test_f1 = BinaryF1Score().to(device)
+
+
     def train(self, model, train_loader, dev_loader, test_loader, optimizer, criterion):
         assert not self.has_run, "Training loop already executed. Create new instance."
         assert self.epochs > 0, "epochs must be positive"
@@ -84,11 +89,11 @@ class Train_Loop():
                 loss.backward()
                 optimizer.step()
                 total_loss += loss.item()
-                total_f1 += binary_f1_score(pred.cpu(), y_batch.cpu()) #we assume (Batch x Seq Len)
+                self.train_f1(pred, y_batch) #we assume (Batch x Seq Len)
 
             self.lossi.append(total_loss / len(train_loader)) #append avg loss over train  batches
-            self.f1i.append(total_f1 / len(train_loader)) #append avg f1 over train  batches
-
+            self.f1i.append(self.train_f1.compute()) #append  f1 over train  batches
+            self.train_f1.reset()
 
             #DEV 
             model.eval()
@@ -100,11 +105,12 @@ class Train_Loop():
                     dev_pred = model(dev_X_batch)
                     dev_loss = criterion(dev_pred, dev_y_batch)
                     total_dev_loss += dev_loss.item()
-                    total_dev_f1 += binary_f1_score(dev_pred.cpu(), dev_y_batch.cpu()) #we assume (Batch x Seq Len)
+                    self.dev_f1(dev_pred, dev_y_batch) #we assume (Batch x Seq Len)
 
 
                 self.devlossi.append(total_dev_loss / len(dev_loader)) #append avg loss over dev  batches
-                self.devf1i.append(total_dev_f1 / len(dev_loader)) #append avg f1 over dev  batches
+                self.devf1i.append(self.dev_f1.compute()) #append  f1 over dev  batches
+                self.dev_f1.reset()
 
 
             #TEST
@@ -116,12 +122,12 @@ class Train_Loop():
                     test_pred = model(test_X_batch)
                     test_loss = criterion(test_pred, test_y_batch)
                     total_test_loss += test_loss.item()
-                    total_test_f1 += binary_f1_score(test_pred.cpu(), test_y_batch.cpu()) #we assume (Batch x Seq Len)
+                    self.test_f1(test_pred, test_y_batch) #we assume (Batch x Seq Len)
 
 
                 self.testlossi.append(total_test_loss / len(test_loader)) #append avg loss over test  batches
-                self.testf1i.append(total_test_f1 / len(test_loader)) #append avg f1 over test  batches
-
+                self.testf1i.append(self.test_f1.compute()) #append  f1 over test  batches
+                self.test_f1.reset()
 
 
             # UPDATES
@@ -129,7 +135,7 @@ class Train_Loop():
             self._update_early_stop()
 
             pbar.set_description(f"Loss: {self.lossi[-1]:.4f}, Dev Loss: {self.devlossi[-1]:.4f}")
-            
+
             # CHECKS
             if self._is_best():
                 self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, name='best_dev_')
@@ -229,14 +235,14 @@ class Train_Loop():
 
         plt.subplot(2, 1, 2)
 
-        plt.plot(self.f1i, color="#346beb", label=f'Train F1; max={self.best_f1i:0.2f}' )
-        plt.plot(self.devf1i, color="#eb7734", label=f'Dev F1; max={self.best_dev_f1i:0.2f}')
+        plt.plot(self.f1i, color="#346beb", label=f'Train F1; max={self.best_f1:0.2f}' )
+        plt.plot(self.devf1i, color="#eb7734", label=f'Dev F1; max={self.best_dev_f1:0.2f}')
         plt.plot(self.moving_mean_f1i, alpha=0.55, color="#346beb");
         plt.plot(self.moving_mean_devf1i , alpha=0.55, color="#eb7734"); 
 
 
-        plt.scatter(self.best_f1_idx, self.best_f1i, color="black", s=20, marker='v', zorder=6 )
-        plt.scatter(self.best_dev_f1_idx, self.best_dev_f1i, color="black", s=20, marker='v', zorder=6)
+        plt.scatter(self.best_f1_idx, self.best_f1, color="black", s=20, marker='v', zorder=6 )
+        plt.scatter(self.best_dev_f1_idx, self.best_dev_f1, color="black", s=20, marker='v', zorder=6)
 
         plt.grid(True, axis='both', alpha=0.7)
         plt.xlabel('Epochs')
@@ -249,7 +255,7 @@ class Train_Loop():
 
     def _do_early_stop(self, model):
         print(f"Early stopping at epoch {self.curr_epoch}")
-        self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, optimizer=None)
+        self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, optimizer=None, name='earlystop_')
 
     def _do_auto_save(self, model, optimizer):
         self._save(model=model, optimizer=optimizer, mode=SaveMode.CHECKPOINT)
