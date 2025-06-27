@@ -31,6 +31,8 @@ class Train_Loop():
         self.epochs = epochs
         self.curr_epoch = 0 
 
+        os.mkdir(self.save_dir)
+
 
         #plotting metrics
         self.lossi = []
@@ -66,11 +68,12 @@ class Train_Loop():
         self.test_f1 = BinaryF1Score().to(device)
 
 
-    def train(self, model, train_loader, dev_loader, test_loader, optimizer, criterion):
+    def train(self, model, optimizer, criterion, train_loader, dev_loader, test_loader=None):
         assert not self.has_run, "Training loop already executed. Create new instance."
         assert self.epochs > 0, "epochs must be positive"
         
         self.has_run = True # to prevent for running the loop again without inilalizing the params again
+        model = model.to(self.device)
 
         pbar = tqdm(range(self.epochs))
         for epoch in pbar:
@@ -92,7 +95,7 @@ class Train_Loop():
                 self.train_f1(pred, y_batch) #we assume (Batch x Seq Len)
 
             self.lossi.append(total_loss / len(train_loader)) #append avg loss over train  batches
-            self.f1i.append(self.train_f1.compute()) #append  f1 over train  batches
+            self.f1i.append(self.train_f1.compute().item()) #append  f1 over train  batches
             self.train_f1.reset()
 
             #DEV 
@@ -109,25 +112,25 @@ class Train_Loop():
 
 
                 self.devlossi.append(total_dev_loss / len(dev_loader)) #append avg loss over dev  batches
-                self.devf1i.append(self.dev_f1.compute()) #append  f1 over dev  batches
+                self.devf1i.append(self.dev_f1.compute().item()) #append  f1 over dev  batches
                 self.dev_f1.reset()
 
 
             #TEST
-            total_test_loss = 0.0
-            total_test_f1 = 0.0
-            with torch.no_grad():
-                for test_X_batch , test_y_batch in test_loader:
-                    test_X_batch, test_y_batch = test_X_batch.to(self.device), test_y_batch.to(self.device)
-                    test_pred = model(test_X_batch)
-                    test_loss = criterion(test_pred, test_y_batch)
-                    total_test_loss += test_loss.item()
-                    self.test_f1(test_pred, test_y_batch) #we assume (Batch x Seq Len)
+            # total_test_loss = 0.0
+            # total_test_f1 = 0.0
+            # with torch.no_grad():
+            #     for test_X_batch , test_y_batch in test_loader:
+            #         test_X_batch, test_y_batch = test_X_batch.to(self.device), test_y_batch.to(self.device)
+            #         test_pred = model(test_X_batch)
+            #         test_loss = criterion(test_pred, test_y_batch)
+            #         total_test_loss += test_loss.item()
+            #         self.test_f1(test_pred, test_y_batch) #we assume (Batch x Seq Len)
 
 
-                self.testlossi.append(total_test_loss / len(test_loader)) #append avg loss over test  batches
-                self.testf1i.append(self.test_f1.compute()) #append  f1 over test  batches
-                self.test_f1.reset()
+            #     self.testlossi.append(total_test_loss / len(test_loader)) #append avg loss over test  batches
+            #     self.testf1i.append(self.test_f1.compute().item()) #append  f1 over test  batches
+            #     self.test_f1.reset()
 
 
             # UPDATES
@@ -258,7 +261,7 @@ class Train_Loop():
         self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, optimizer=None, name='earlystop_')
 
     def _do_auto_save(self, model, optimizer):
-        self._save(model=model, optimizer=optimizer, mode=SaveMode.CHECKPOINT)
+        self._save(model=model, optimizer=optimizer, mode=SaveMode.CHECKPOINT, name='autosave_')
 
     def _save(self, model, mode: SaveMode, optimizer=None, name=''):
             if mode == SaveMode.CHECKPOINT:
@@ -273,10 +276,10 @@ class Train_Loop():
                     'devf1i': self.devf1i,
                     'testf1i': self.testf1i
                 }
-                torch.save(checkpoint, f"{self.save_dir}/{name}checkpoint_epoch_{self.curr_epoch}.pt")
+                torch.save(checkpoint, f"{self.save_dir}/{name}checkpoint.pt")
 
             elif mode == SaveMode.JUST_MODEL_AND_METRICS:
-                torch.save(model.state_dict(), f"{self.save_dir}/{name}model_at_{self.curr_epoch}.pt")
+                torch.save(model.state_dict(), f"{self.save_dir}/{name}model.pt")
                 metrics = {
                     'epoch': self.curr_epoch,
                     'lossi': self.lossi,
@@ -286,5 +289,5 @@ class Train_Loop():
                     'devf1i': self.devf1i,
                     'testf1i': self.testf1i
                 }
-                with open(f"{self.save_dir}/{name}metrics_epoch_{self.curr_epoch}.json", 'w') as f:
+                with open(f"{self.save_dir}/{name}metrics.json", 'w') as f:
                     json.dump(metrics, f, indent=2)
