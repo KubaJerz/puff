@@ -137,7 +137,7 @@ class Train_Loop():
             self._update_best_metrics()
             self._update_early_stop()
 
-            pbar.set_description(f"Loss: {self.lossi[-1]:.4f}, Dev Loss: {self.devlossi[-1]:.4f}")
+            pbar.set_description(f"Device:{self.device} curr Loss: {self.lossi[-1]:.4f}, curr Dev Loss: {self.devlossi[-1]:.4f}")
 
             # CHECKS
             if self._is_best():
@@ -257,8 +257,8 @@ class Train_Loop():
         plt.close()
 
     def _do_early_stop(self, model):
-        print(f"Early stopping at epoch {self.curr_epoch}")
-        self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, optimizer=None, name='earlystop_')
+        print(f"{self.device} Early stopping at epoch {self.curr_epoch}")
+        self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, optimizer=None, name=f'earlystop_{self.curr_epoch}_')
 
     def _do_auto_save(self, model, optimizer):
         self._save(model=model, optimizer=optimizer, mode=SaveMode.CHECKPOINT, name='autosave_')

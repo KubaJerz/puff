@@ -6,15 +6,11 @@ import os
 import importlib
 import sys
 
-
-
-
 class Expt_Runner():
-    def __init__(self, expt_dir, sub_runs_list, run_on_gpu=False):
+    def __init__(self, expt_dir, sub_runs_list, run_on_gpu):
         self.expt_dir = expt_dir
         self.sub_runs_list = sub_runs_list.copy()
         self.run_on_gpu = run_on_gpu
-        self.lock = threading.Lock()  
         self.available_gpu_list = []
 
         if run_on_gpu:
@@ -37,15 +33,17 @@ class Expt_Runner():
             NOTE: We are waiting for ALL processes to complete before starting new ones
             So if 2 GPUS they fully train then we do the next two.
         """
+    
+        mp.set_start_method('spawn') #, force=True) #This atart method works better with CUDA
+
         processes = []
         run_id = 0
         while self.sub_runs_list:
-            while self.available_gpu_list:
+            while self.available_gpu_list and self.sub_runs_list:
                 gpu_idx, name = self.available_gpu_list.pop(0)
                 train_run_config = self.sub_runs_list.pop(0)
 
-
-                train_loop =  Train_Loop(save_dir=f'{self.expt_dir}/{run_id}', epochs=train_run_config['epochs'], device=f'cuda:{gpu_idx}', plot_freq=10)
+                train_loop =  Train_Loop(save_dir=f'{self.expt_dir}/{run_id}', epochs=train_run_config['epochs'], device=f'cuda:{gpu_idx}', plot_freq=train_run_config['plot_freq'])
                 model, optimizer, criterion, train_loader, dev_loader, test_loader = self._setup_train_objs(train_run_config)
 
                 p = mp.Process(target=train_loop.train, args=(model, optimizer, criterion, train_loader, dev_loader, test_loader))
@@ -120,7 +118,15 @@ class Expt_Runner():
     def _setup_criterion(self, crit_config):
         crit_class_str = crit_config["criterion"]
         crit_params = crit_config.get("criterion_params", {})
-        crit_class = self._load_class_from_str(crit_class_str)
+
+        if '/' in crit_class_str: # if specified liek this: /home/kuba/projects/puff/test/loss.DiceBCELoss
+            module_dir = os.path.dirname(crit_class_str)
+            module_name, loss_class_name = os.path.basename(crit_class_str).rsplit('.')
+            sys.path.insert(0, module_dir)
+            module = importlib.import_module(module_name)
+            crit_class = getattr(module, loss_class_name)
+        else:
+            crit_class = self._load_class_from_str(crit_class_str)
         return crit_class(**crit_params)
 
 

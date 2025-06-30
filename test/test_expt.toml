@@ -1,0 +1,96 @@
+# ML Experiment Configuration
+# Choose ONE experiment type by setting run_type
+
+[meta_data]
+# Options: "hyperparameter_static", "hyperparameter_sweep"
+run_type = "static" #or "static"
+
+name = "test00"
+description = "Testing baseline model with multiple runs"
+author = "Kuba"
+created_date = "2025-06-27"
+expt_dir = "/home/kuba/projects/puff/test/experiments"
+plot_freq = 10
+
+#################################
+# STATIC  CONFIGURATION  
+# Use when run_type = "static"
+# Runs the same config multiple times with different random seeds
+#################################
+[static]
+num_runs = 5
+epochs = 100
+run_on_gpu = true #this does nothing right now 
+plot_freq = 2
+save_checkpoints = true
+
+[static.model]
+model_path = "/home/kuba/projects/puff/test/unet.py"
+# input_dim = 784
+# hidden_dim = 128
+# output_dim = 10
+# dropout = 0.2
+
+[static.optimizer]
+optimizer = "torch.optim.Adam"
+lr = 0.001
+weight_decay = 1e-4
+
+[static.criterion]
+criterion = "/home/kuba/projects/puff/test/loss.DiceBCELoss"
+# label_smoothing = 0.0
+
+[static.data]
+train_path = "/home/kuba/projects/puff/test/data"
+dev_path = "/home/kuba/projects/puff/test/data"
+test_path = "/home/kuba/projects/puff/test/data"
+batch_size = 32
+# num_workers = 4
+
+#################################
+# HYPERPARAMETER SWEEP CONFIGURATION
+# Use when run_type = "hyperparameter_sweep"
+#################################
+[sweep]
+# Sampling strategy: "grid_search", "random_search"
+sampling_strategy = "grid_search"
+num_runs = 5  # For random search, ignored for grid search
+epochs = 50  # Usually fewer epochs for sweeps
+run_on_gpu = true #this does nothing right now
+plot_freq = 20
+
+[sweep.model]
+model_path = "/home/kuba/projects/puff/test/my_model.py"
+# Fixed parameters
+# input_dim = 784
+# output_dim = 10
+# activation = "relu"
+
+[sweep.optimizer]
+optimizer = "torch.optim.Adam"
+
+
+[sweep.criterion]
+criterion = "torch.nn.CrossEntropyLoss"
+
+[sweep.data]
+train_path = "/home/kuba/projects/puff/data"
+dev_path = "/home/kuba/projects/puff/data"
+test_path = "/home/kuba/projects/puff/data"
+batch_size = "ToBeSampled"
+# num_workers = 4
+
+# Parameters to sweep - define ranges/options
+[sweep.search_space]
+hidden_dim = [64, 128, 256, 512]
+dropout = [0.1, 0.2, 0.3, 0.5]
+lr = [0.0001, 0.001, 0.01, 0.1]
+batch_size = [16, 32, 64, 128]
+weight_decay = [0.0, 1e-5, 1e-4, 1e-3]
+
+# For continuous parameters, you can specify ranges
+[sweep.search_space.ranges]
+# lr_min = 1e-5
+# lr_max = 1e-1
+# dropout_min = 0.0
+# dropout_max = 0.5

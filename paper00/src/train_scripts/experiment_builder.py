@@ -14,10 +14,10 @@ class ExperimentBuilder():
         self.sweep = {}
         self.expt_dir = None
 
-        self.parse_toml()
+        self._parse_toml()
 
     def build_experiment_runs(self):
-        if self._is_hyperparamer_sweep():
+        if self._is_hyperparameter_sweep():
             if self.sweep['sampling_strategy'].lower() == 'random_search': 
                 self.sub_runs_list = [self._random_sample() for i in range(self.sweep['num_runs'])]
             else:
@@ -35,28 +35,36 @@ class ExperimentBuilder():
         runner.run()
 
     def _parse_toml(self):
-        with open(self.toml_file_path, 'rb') as f:
-            toml = tomllib.load(f)
+        try:
+            if not os.path.exists(self.toml_file_path):
+                raise FileNotFoundError(f"Config file not found: {self.toml_file_path}")
+            with open(self.toml_file_path, 'rb') as f:
+                toml = tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            raise ValueError(f"Invalid TOML syntax in {self.toml_file_path}: {e}")
+
 
         self.meta_data = toml['meta_data']       
         base_dir = self.meta_data['expt_dir']
         expt_name = self.meta_data['name']
 
         self.expt_dir = os.path.join(base_dir, f"{expt_name}")
+        os.mkdir(self.expt_dir)
         
         if self._is_hyperparameter_sweep():
-            self.sweep = toml.get['sweep']
-            self.run_on_gpu = self.sweep.get['run_on_gpu']
+            self.sweep = toml['sweep']
+            self.run_on_gpu = self.sweep['run_on_gpu']
         else:
-            self.static = toml.get['static']
-            self.run_on_gpu = self.static.get['run_on_gpu']
+            self.static = toml['static']
+            self.run_on_gpu = self.static['run_on_gpu']
     
-    def _is_hyperparamer_sweep(self):
+    def _is_hyperparameter_sweep(self):
         return (self.meta_data['run_type']).lower() == "sweep"
     
     def _setup_static_run(self):
         train_run_config = {
             'epochs': self.static['epochs'] ,
+            'plot_freq': self.meta_data['plot_freq'],
             'model': self._build_model_config(self.static['model'] ),
             'optimizer': self._build_optimizer_config(self.static['optimizer'] ),
             'criterion': self._build_criterion_config(self.static['criterion'] ),
@@ -68,11 +76,12 @@ class ExperimentBuilder():
         search_space = self.sweep['search_space']
         
         train_run_config = {
-            'epochs': self.static['epochs'] ,
-            'model': self._build_model_config(self.static['model'] ),
-            'optimizer': self._build_optimizer_config(self.static['optimizer'] ),
-            'criterion': self._build_criterion_config(self.static['criterion'] ),
-            'data': self._build_data_config(self.static['data'])
+            'epochs': self.sweep['epochs'] ,
+            'plot_freq': self.meta_data['plot_freq'],
+            'model': self._build_model_config(self.sweep['model'] ),
+            'optimizer': self._build_optimizer_config(self.sweep['optimizer'] ),
+            'criterion': self._build_criterion_config(self.sweep['criterion'] ),
+            'data': self._build_data_config(self.sweep['data'])
         }
         
         sampled_params = {}
@@ -104,11 +113,12 @@ class ExperimentBuilder():
         configs = []
         for combo in combinations:
             train_run_config = {
-                'epochs': self.static['epochs'] ,
-                'model': self._build_model_config(self.static['model'] ),
-                'optimizer': self._build_optimizer_config(self.static['optimizer'] ),
-                'criterion': self._build_criterion_config(self.static['criterion'] ),
-                'data': self._build_data_config(self.static['data'])
+                'epochs': self.sweep['epochs'] ,
+                'plot_freq': self.meta_data['plot_freq'],
+                'model': self._build_model_config(self.sweep['model'] ),
+                'optimizer': self._build_optimizer_config(self.sweep['optimizer'] ),
+                'criterion': self._build_criterion_config(self.sweep['criterion'] ),
+                'data': self._build_data_config(self.sweep['data'])
             }
             # Create sampled parameters dictionary
             sampled_params = dict(zip(param_names, combo))
@@ -122,7 +132,13 @@ class ExperimentBuilder():
     
     def _apply_sampled_params(self, config, sampled_params):
         """Apply sampled hyperparameters to the appropriate sections of the config"""
+        valid_params = {'lr', 'weight_decay', 'batch_size', 'hidden_dim', 'dropout', 'label_smoothing'}
+        
+
         for param, value in sampled_params.items():
+            if param not in valid_params:
+                raise ValueError(f"Unknown hyperparameter: {param}")
+            
             if param == 'lr':
                 config['optimizer']['optimizer_params']['lr'] = value
             elif param == 'weight_decay':
@@ -135,10 +151,11 @@ class ExperimentBuilder():
                 config['criterion']['criterion_params']['label_smoothing'] = value
 
 
+
     def _build_model_config(self, model_section):
         """Build model config dic"""
         config = {
-            'model_path': model_section.get['model_path'],
+            'model_path': model_section['model_path'],
             'model_hyperparams': {}
         }
         
@@ -181,9 +198,18 @@ class ExperimentBuilder():
             'test_path': data_section['test_path'],
             'batch_size': data_section['batch_size']
         }
+    
+    def get_run_on_gpu(self):
+        """ returns if run_on_gpu was true in the config"""
+        return self.run_on_gpu
 
+    def get_experiment_dir(self):
+        """ returns where the exper dir is located"""
+        return self.expt_dir
 
-
+    def get_sub_runs_list(self):
+        """" return the sub runs list"""
+        return self.sub_runs_list
 
 
 if __name__ == "__main__":

@@ -1,0 +1,16 @@
+1. This is the regime that we will use to hyper-paramer search and fine tune the model
+    It is sa 60/20/20 split across participents
+
+    1.1
+        This is where we take 60/20/20 from the each participte then append to the 60 to train and 20 to dev then the last 20is test
+        This is how we eval customization
+
+
+2. This is the type of split as one but we now ranodmly do it 30 times and then will eval in the aggregate
+
+    2.1 This is the same idea as 1.1
+
+
+3. We split uo the sata across recordings
+
+4. the self-supervised regime (see paper for details) 
