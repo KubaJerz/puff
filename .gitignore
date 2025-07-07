@@ -3,3 +3,5 @@
 *.DS_STORE
 __pycache__/
 name_to_id.txt
+*.json
+*.png
