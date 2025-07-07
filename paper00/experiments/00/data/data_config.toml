@@ -1,0 +1,24 @@
+[paths]
+labels_path = "/home/kuba/Desktop/smoking_labels_export_2025-07-07_15.json"
+save_dir = "/home/kuba/projects/puff/paper00/experiments/00/data"
+
+[experiment]
+label = [ "puff", "puffs",]
+resample = false
+random_seed = 69
+window_size = 256
+step_size = 256
+percent_negative_windows = 0.5
+threshold_gap_minutes = 30
+use_gyro = false
+
+[split]
+train_percent = 0.6
+dev_percent = 0.2
+test_percent = 0.2
+num_participants = 10
+
+[splits]
+train_ids = [ 3, 8, 2, 5, 0, 9,]
+dev_ids = [ 1, 4,]
+test_ids = [ 7, 6,]

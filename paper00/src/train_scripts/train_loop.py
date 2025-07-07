@@ -194,10 +194,17 @@ class Train_Loop():
             f1i_tensor = torch.tensor(self.f1i, dtype=torch.float32)
             devf1i_tensor = torch.tensor(self.devf1i, dtype=torch.float32)
 
-            self.moving_mean_lossi =  torch.nn.functional.avg_pool1d(lossi_tensor.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
-            self.moving_mean_devlossi = torch.nn.functional.avg_pool1d(devlossi_tensor.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
-            self.moving_mean_f1i = torch.nn.functional.avg_pool1d(f1i_tensor.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
-            self.moving_mean_devf1i = torch.nn.functional.avg_pool1d(devf1i_tensor.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
+            pad_size = kernel_size - 1
+            lossi_padded = torch.nn.functional.pad(lossi_tensor, (pad_size, 0), mode='constant', value=float('nan'))
+            devlossi_padded = torch.nn.functional.pad(devlossi_tensor, (pad_size, 0), mode='constant', value=float('nan'))
+            f1i_padded = torch.nn.functional.pad(f1i_tensor, (pad_size, 0), mode='constant', value=float('nan'))
+            devf1i_padded = torch.nn.functional.pad(devf1i_tensor, (pad_size, 0), mode='constant', value=float('nan'))
+
+            # Now avg_pool1d will give you the same length as original, with NaN for early epochs
+            self.moving_mean_lossi = torch.nn.functional.avg_pool1d(lossi_padded.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
+            self.moving_mean_devlossi = torch.nn.functional.avg_pool1d(devlossi_padded.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
+            self.moving_mean_f1i = torch.nn.functional.avg_pool1d(f1i_padded.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
+            self.moving_mean_devf1i = torch.nn.functional.avg_pool1d(devf1i_padded.unsqueeze(dim=0), kernel_size=kernel_size, stride=1).squeeze()
 
     def _is_best(self):
         return self.devlossi[-1] == self.best_dev_loss 

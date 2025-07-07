@@ -1,0 +1,5 @@
+train onf id:3 and test on id:1
+
+ssl then train on id:1 and eval on id:3
+
+do the whole thing again 

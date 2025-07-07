@@ -5,7 +5,7 @@ from train_loop import Train_Loop
 import os
 import importlib
 import sys
-import tomllib
+import toml
 
 class Expt_Runner():
     def __init__(self, expt_dir, sub_runs_list, run_on_gpu):
@@ -78,7 +78,7 @@ class Expt_Runner():
         toml_file_path = os.path.join(save_dir,'run_params.toml')
         try:
             with open(toml_file_path, 'w') as f:
-                toml = tomllib.dump(config,f)
+                toml.dump(config,f)
         except Exception as e:
             raise RuntimeError(f"Not able to write to {toml_file_path}: {e}")
 
@@ -158,6 +158,7 @@ class Expt_Runner():
         dev_loader = torch.utils.data.DataLoader(dev_dataset, batch_size=batch_size, shuffle=False)
 
         if use_test:
+            print(f'use test is true the value is:{use_test}')
             test_dataset = load_dataset_from_dir(data_config["test_path"], type="test")
             test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         else:
