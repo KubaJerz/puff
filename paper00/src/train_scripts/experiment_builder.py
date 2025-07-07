@@ -195,8 +195,9 @@ class ExperimentBuilder():
         return {
             'train_path': data_section['train_path'],
             'dev_path': data_section['dev_path'],
-            'test_path': data_section['test_path'],
-            'batch_size': data_section['batch_size']
+            'test_path': data_section.get('test_path', None),
+            'batch_size': data_section['batch_size'],
+            'use_test': self.meta_data.get('use_test', True)
         }
     
     def get_run_on_gpu(self):

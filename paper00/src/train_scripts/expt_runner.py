@@ -5,6 +5,7 @@ from train_loop import Train_Loop
 import os
 import importlib
 import sys
+import tomllib
 
 class Expt_Runner():
     def __init__(self, expt_dir, sub_runs_list, run_on_gpu):
@@ -45,7 +46,7 @@ class Expt_Runner():
 
                 train_loop =  Train_Loop(save_dir=f'{self.expt_dir}/{run_id}', epochs=train_run_config['epochs'], device=f'cuda:{gpu_idx}', plot_freq=train_run_config['plot_freq'])
                 model, optimizer, criterion, train_loader, dev_loader, test_loader = self._setup_train_objs(train_run_config)
-
+                self._save_train_run_config(config=train_run_config, save_dir=f'{self.expt_dir}/{run_id}')
                 p = mp.Process(target=train_loop.train, args=(model, optimizer, criterion, train_loader, dev_loader, test_loader))
                 p.start()
                 processes.append((p, gpu_idx, name))
@@ -56,6 +57,7 @@ class Expt_Runner():
                 self.available_gpu_list.append((gpu_idx, name))
 
             processes = []
+
 
     def _cpu_run(self):
         for i, train_run_config in enumerate(self.sub_runs_list):
@@ -71,6 +73,15 @@ class Expt_Runner():
                 self.available_gpu_list.append((i, torch.cuda.get_device_name(i)))
         else:
             print("CUDA not available")
+
+    def _save_train_run_config(self, config, save_dir):
+        toml_file_path = os.path.join(save_dir,'run_params.toml')
+        try:
+            with open(toml_file_path, 'w') as f:
+                toml = tomllib.dump(config,f)
+        except Exception as e:
+            raise RuntimeError(f"Not able to write to {toml_file_path}: {e}")
+
 
     def _load_class_from_str(self, path_str):
         """
@@ -132,20 +143,25 @@ class Expt_Runner():
 
     def _setup_loaders(self, data_config):
         batch_size = data_config.get("batch_size")
+        use_test = data_config.get("use_test")
 
         def load_dataset_from_dir(path, type):
-            X = torch.load(os.path.join(path, f"X_{type}.pt"))
-            y = torch.load(os.path.join(path, f"y_{type}.pt"))
+            X, y  = torch.load(os.path.join(path, f"{type}.pt"))
+            # y = torch.load(os.path.join(path, f"y_{type}.pt"))
             dataset = torch.utils.data.TensorDataset(X, y)
             return dataset
 
         train_dataset = load_dataset_from_dir(data_config["train_path"], type="train")
         dev_dataset = load_dataset_from_dir(data_config["dev_path"], type="dev")
-        test_dataset = load_dataset_from_dir(data_config["test_path"], type="test")
 
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
         dev_loader = torch.utils.data.DataLoader(dev_dataset, batch_size=batch_size, shuffle=False)
-        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+        if use_test:
+            test_dataset = load_dataset_from_dir(data_config["test_path"], type="test")
+            test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        else:
+            test_loader = None
 
         return train_loader, dev_loader, test_loader
         

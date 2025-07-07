@@ -82,7 +82,6 @@ class Train_Loop():
             #TRAIN
             model.train()
             total_loss = 0.0
-            total_f1 = 0.0
 
             for X_batch, y_batch in train_loader:
                 X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
@@ -101,7 +100,6 @@ class Train_Loop():
             #DEV 
             model.eval()
             total_dev_loss = 0.0
-            total_dev_f1 = 0.0
             with torch.no_grad():
                 for dev_X_batch , dev_y_batch in dev_loader:
                     dev_X_batch, dev_y_batch = dev_X_batch.to(self.device), dev_y_batch.to(self.device)
@@ -116,21 +114,21 @@ class Train_Loop():
                 self.dev_f1.reset()
 
 
-            #TEST
-            # total_test_loss = 0.0
-            # total_test_f1 = 0.0
-            # with torch.no_grad():
-            #     for test_X_batch , test_y_batch in test_loader:
-            #         test_X_batch, test_y_batch = test_X_batch.to(self.device), test_y_batch.to(self.device)
-            #         test_pred = model(test_X_batch)
-            #         test_loss = criterion(test_pred, test_y_batch)
-            #         total_test_loss += test_loss.item()
-            #         self.test_f1(test_pred, test_y_batch) #we assume (Batch x Seq Len)
+            # TEST
+            if test_loader:
+                total_test_loss = 0.0
+                with torch.no_grad():
+                    for test_X_batch , test_y_batch in test_loader:
+                        test_X_batch, test_y_batch = test_X_batch.to(self.device), test_y_batch.to(self.device)
+                        test_pred = model(test_X_batch)
+                        test_loss = criterion(test_pred, test_y_batch)
+                        total_test_loss += test_loss.item()
+                        self.test_f1(test_pred, test_y_batch) #we assume (Batch x Seq Len)
 
 
-            #     self.testlossi.append(total_test_loss / len(test_loader)) #append avg loss over test  batches
-            #     self.testf1i.append(self.test_f1.compute().item()) #append  f1 over test  batches
-            #     self.test_f1.reset()
+                    self.testlossi.append(total_test_loss / len(test_loader)) #append avg loss over test  batches
+                    self.testf1i.append(self.test_f1.compute().item()) #append  f1 over test  batches
+                    self.test_f1.reset()
 
 
             # UPDATES
