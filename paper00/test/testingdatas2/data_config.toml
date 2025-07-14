@@ -1,6 +1,6 @@
 [paths]
 labels_path = "/home/kuba/Desktop/smoking_labels_export_2025-07-07_15.json"
-save_dir = "/home/kuba/projects/puff/paper00/experiments/00/data"
+save_dir = "/home/kuba/projects/puff/paper00/test/testingdatas2"
 
 [experiment]
 label = [ "puff", "puffs",]
@@ -16,9 +16,8 @@ use_gyro = false
 train_percent = 0.6
 dev_percent = 0.2
 test_percent = 0.2
-num_participants = 10
 
 [splits]
-train_ids = [ 5, 8, 1, 9, 7, 3,]
-dev_ids = [ 4, 0,]
-test_ids = [ 2, 6,]
+train_sessions = []
+dev_essions = []
+test_sessions = []

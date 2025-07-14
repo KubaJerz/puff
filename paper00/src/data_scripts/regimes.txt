@@ -6,9 +6,7 @@
         This is how we eval customization
 
 
-2. This is the type of split as one but we now ranodmly do it 30 times and then will eval in the aggregate
-
-    2.1 This is the same idea as 1.1
+2. WE split across sessions and allow for mixing of participents. (use train model to help with labeling)
 
 
 3. We split uo the sata across recordings

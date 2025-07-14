@@ -1,0 +1,59 @@
+# ML Experiment Configuration
+# Choose ONE experiment type by setting run_type
+
+[meta_data]
+# Options: "hyperparameter_static", "hyperparameter_sweep"
+run_type = "sweep" #or "static"
+
+name = "00t31exx"
+description = "training on 3 and testing on 1"
+author = "Kuba"
+created_date = "2025-09-07"
+expt_dir = "/home/kuba/projects/puff/paper00/experiments/01/runs"
+plot_freq = 10
+
+#################################
+# HYPERPARAMETER SWEEP CONFIGURATION
+# Use when run_type = "hyperparameter_sweep"
+#################################
+[sweep]
+# Sampling strategy: "grid_search", "random_search"
+sampling_strategy = "random_search"
+num_runs = 15  # For random search, ignored for grid search
+epochs = 100  
+run_on_gpu = true #this does nothing right now
+
+[sweep.model]
+model_path = "/home/kuba/projects/puff/paper00/unet.py"
+in_channels = 3
+
+[sweep.optimizer]
+optimizer = "torch.optim.Adam"
+
+
+[sweep.criterion]
+criterion = "/home/kuba/projects/puff/test/loss.DiceBCELoss"
+
+[sweep.data]
+train_path = "/home/kuba/projects/puff/paper00/experiments/00/data"
+dev_path = "/home/kuba/projects/puff/paper00/experiments/00/data"
+test_path = "/home/kuba/projects/puff/paper00/experiments/00/data"
+batch_size = "ToBeSampled"
+use_test = false
+
+# num_workers = 4
+
+# Parameters to sweep - define ranges/options
+[sweep.search_space]
+# hidden_dim = [64, 128, 256, 512]
+# dropout = [0.1, 0.2, 0.3, 0.5]
+lr = [0.0001, 0.001, 0.0003]
+batch_size = [16, 32, 64, 128]
+# weight_decay = [0.0, 1e-5, 1e-4, 1e-3]
+
+# For continuous parameters, you can specify ranges
+[sweep.search_space.ranges]
+# lr_min = 1e-5
+# lr_max = 1e-1
+# dropout_min = 0.0
+# dropout_max = 0.5
