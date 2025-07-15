@@ -1,0 +1,4 @@
+We split across sessions.
+For particaptes ....
+
+then we train a model so that it can help with labels.
