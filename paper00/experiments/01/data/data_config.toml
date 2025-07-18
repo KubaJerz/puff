@@ -1,0 +1,23 @@
+[paths]
+labels_path = "/home/kuba/projects/puff/paper00/experiments/01/data/smoking_labels_export_2025-07-15_22.json"
+save_dir = "/home/kuba/projects/puff/paper00/experiments/01/data"
+
+[experiment]
+label = [ "puffs", "puff",]
+resample = false
+random_seed = 70
+window_size = 1024
+step_size = 1024
+percent_negative_windows = 0.8
+threshold_gap_minutes = 30
+use_gyro = false
+
+[split]
+train_percent = 0.8
+dev_percent = 0.2
+test_percent = 0
+
+[splits]
+train_sessions = [ "Tonmoy Phase 3_P003_1_2025-05-15_13_14_47.5", "Tonmoy Phase 3_P003_1_2025-05-14_13_45_24.3", "Tonmoy Phase 3_P003_1_2025-05-19_05_30_05.3", "P005 Phase 3_P005_10_2025-04-26_05_29_55", "Tonmoy Phase 3_P003_1_2025-05-16_05_30_00.2", "Alsaad Phase 3_P006_6_2024-12-20_05_12_36", "Tonmoy Phase 3_P003_1_2025-05-14_13_45_24.4", "Tonmoy Phase 3_P003_1_2025-05-20_05_30_21.3", "Tonmoy Phase 3_P003_1_2025-05-13_00_18_06.1", "Asfik Phase 3_P002_3_2025-05-17_09_19_41.5", "Tonmoy Phase 3_P003_1_2025-05-15_05_30_38.2", "Asfik Phase 3_P002_3_2025-05-12_12_51_29.5", "Tonmoy Phase 3_P003_1_2025-05-14_13_45_24.2", "Asfik Phase 3_P002_3_2025-05-12_12_51_29.2", "Asfik Phase 3_P002_3_2025-05-12_12_51_29.3", "Tonmoy Phase 3_P003_1_2025-05-20_05_30_21.2", "P005 Phase 3_P005_10_2025-04-29_13_17_14", "Asfik Phase 3_P002_3_2025-05-12_12_51_29.4", "Tonmoy Phase 3_P003_1_2025-05-12_15_14_59.2", "Tonmoy Phase 3_P003_1_2025-05-16_14_04_12", "Tonmoy Phase 3_P003_1_2025-05-13_00_18_06.2", "Tonmoy Phase 3_P003_1_2025-05-14_05_30_02.2", "Tonmoy Phase 3_P003_1_2025-05-19_05_30_05.2", "Asfik Phase 3_P002_3_2025-05-17_09_19_41.2", "Tonmoy Phase 3_P003_1_2025-05-17_10_04_25.2", "P001 Phase 3_P001_7_2025-05-13_23_13_50", "Tonmoy Phase 3_P003_1_2025-05-19_05_30_05.4", "Alsaad Phase 3_P006_6_2024-12-20_15_18_00.2", "Asfik Phase 3_P002_3_2025-05-12_12_51_29.1", "Asfik Phase 3_P002_3_2025-05-17_09_19_41.4", "Tonmoy Phase 3_P003_1_2025-05-19_05_30_05.5", "Tonmoy Phase 3_P003_1_2025-05-15_13_14_47.2", "Asfik Phase 3_P002_3_2025-05-17_09_19_41.3", "Tonmoy Phase 3_P003_1_2025-05-16_15_35_21", "P005 Phase 3_P005_10_2025-04-25_11_34_20", "Tonmoy Phase 3_P003_1_2025-05-14_13_08_10", "Asfik Phase 3_P002_3_2025-05-17_09_19_41.6", "Asfik Phase 3_P002_3_2025-05-19_16_43_28", "Asfik Phase 3_P002_3_2025-05-20_10_54_16", "P001 Phase 3_P001_7_2025-01-01_10_18_52.2", "P005 Phase 3_P005_10_2025-04-24_01_11_03", "Tonmoy Phase 3_P003_1_2025-05-15_13_14_47.4", "Tonmoy Phase 3_P003_1_2025-05-13_13_29_52.4",]
+dev_essions = [ "Tonmoy Phase 3_P003_1_2025-05-15_13_14_47.3", "Asfik Phase 3_P002_3_2025-05-12_12_51_29.6", "Tonmoy Phase 3_P003_1_2025-05-18_19_51_54", "Tonmoy Phase 3_P003_1_2025-05-13_00_18_06.3", "P005 Phase 3_P005_10_2025-04-23_12_53_54", "Tonmoy Phase 3_P003_1_2025-05-13_13_29_52.2", "P001 Phase 2_P001_7_2024-06-11_09_28_01", "Tonmoy Phase 3_P003_1_2025-05-13_13_29_52.5", "P005 Phase 3_P005_10_2025-04-29_05_30_02", "Tonmoy Phase 3_P003_1_2025-05-13_13_29_52.3", "Asfik Phase 3_P002_3_2025-05-18_22_42_40.3",]
+test_sessions = []

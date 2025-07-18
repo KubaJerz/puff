@@ -2,14 +2,13 @@
 # Choose ONE experiment type by setting run_type
 
 [meta_data]
-# Options: "hyperparameter_static", "hyperparameter_sweep"
-run_type = "static"  #"sweep"
+run_type = "static" #sweep
 
-name = "01tryHyperparamsFrom21"
-description = "training on a few modles with the same hyper params as model 21 from run 00find hyperparams"
+name = "01bestParamMultiRun"
+description = "doing multi run to sees model results but dataset window size is 512"
 author = "Kuba"
 created_date = "2025-07-18"
-expt_dir = "/home/kuba/projects/puff/paper00/experiments/01/runs"
+expt_dir = "/home/kuba/projects/puff/paper00/experiments/02/runs"
 plot_freq = 25
 
 
@@ -41,9 +40,8 @@ criterion = "/home/kuba/projects/puff/test/loss.DiceBCELoss"
 # label_smoothing = 0.0
 
 [static.data]
-train_path = "/home/kuba/projects/puff/paper00/experiments/01/data"
-dev_path = "/home/kuba/projects/puff/paper00/experiments/01/data"
-test_path = "/home/kuba/projects/puff/paper00/experiments/01/data"
+train_path = "/home/kuba/projects/puff/paper00/experiments/02/data"
+dev_path = "/home/kuba/projects/puff/paper00/experiments/02/data"
+test_path = "/home/kuba/projects/puff/paper00/experiments/02/data"
 batch_size = 256
 use_test = false
-

@@ -1,0 +1,26 @@
+epochs = 100
+plot_freq = 25
+
+[model]
+model_path = "/home/kuba/projects/puff/paper00/unet.py"
+
+[optimizer]
+optimizer = "torch.optim.Adam"
+
+[criterion]
+criterion = "/home/kuba/projects/puff/test/loss.DiceBCELoss"
+
+[data]
+train_path = "/home/kuba/projects/puff/paper00/experiments/02/data"
+dev_path = "/home/kuba/projects/puff/paper00/experiments/02/data"
+test_path = "/home/kuba/projects/puff/paper00/experiments/02/data"
+batch_size = 32
+use_test = false
+
+[model.model_hyperparams]
+in_channels = 3
+
+[optimizer.optimizer_params]
+lr = 0.0003
+
+[criterion.criterion_params]

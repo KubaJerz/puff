@@ -3,6 +3,7 @@ import tomllib
 import os
 import random 
 import itertools
+import toml
 
 class ExperimentBuilder():
     def __init__(self, toml_file_path):
@@ -39,23 +40,33 @@ class ExperimentBuilder():
             if not os.path.exists(self.toml_file_path):
                 raise FileNotFoundError(f"Config file not found: {self.toml_file_path}")
             with open(self.toml_file_path, 'rb') as f:
-                toml = tomllib.load(f)
+                config = tomllib.load(f)
         except tomllib.TOMLDecodeError as e:
             raise ValueError(f"Invalid TOML syntax in {self.toml_file_path}: {e}")
 
 
-        self.meta_data = toml['meta_data']       
+        self.meta_data = config['meta_data']       
         base_dir = self.meta_data['expt_dir']
         expt_name = self.meta_data['name']
 
+        #make experiment dir 
         self.expt_dir = os.path.join(base_dir, f"{expt_name}")
         os.mkdir(self.expt_dir)
+
+        #save expt toml to expt path
+        expt_config_path = os.path.join(self.expt_dir, f"{expt_name}.toml")
+        try:
+            with open(expt_config_path, 'w') as f:
+                toml.dump(config,f)
+        except Exception as e:
+            raise RuntimeError(f"Not able to write to {expt_config_path}: {e}")
+
         
         if self._is_hyperparameter_sweep():
-            self.sweep = toml['sweep']
+            self.sweep = config['sweep']
             self.run_on_gpu = self.sweep['run_on_gpu']
         else:
-            self.static = toml['static']
+            self.static = config['static']
             self.run_on_gpu = self.static['run_on_gpu']
     
     def _is_hyperparameter_sweep(self):

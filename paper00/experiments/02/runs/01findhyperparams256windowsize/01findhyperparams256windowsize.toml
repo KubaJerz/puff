@@ -1,0 +1,37 @@
+[meta_data]
+run_type = "sweep"
+name = "01findhyperparams256windowsize"
+description = "training on sessions and dev on sesshions the goal is jsut better label model but dataset window size is 256"
+author = "Kuba"
+created_date = "2025-07-17"
+expt_dir = "/home/kuba/projects/puff/paper00/experiments/02/runs"
+plot_freq = 25
+
+[sweep]
+sampling_strategy = "random_search"
+num_runs = 25
+epochs = 100
+run_on_gpu = true
+
+[sweep.model]
+model_path = "/home/kuba/projects/puff/paper00/unet.py"
+in_channels = 3
+
+[sweep.optimizer]
+optimizer = "torch.optim.Adam"
+
+[sweep.criterion]
+criterion = "/home/kuba/projects/puff/test/loss.DiceBCELoss"
+
+[sweep.data]
+train_path = "/home/kuba/projects/puff/paper00/experiments/02/data"
+dev_path = "/home/kuba/projects/puff/paper00/experiments/02/data"
+test_path = "/home/kuba/projects/puff/paper00/experiments/02/data"
+batch_size = "ToBeSampled"
+use_test = false
+
+[sweep.search_space]
+lr = [ 0.0001, 0.001, 0.0003,]
+batch_size = [ 16, 32, 64, 128, 256,]
+
+# [sweep.search_space.ranges]
