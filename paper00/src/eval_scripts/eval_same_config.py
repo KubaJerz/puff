@@ -84,9 +84,10 @@ class ColorTheme:
 class ModelEvaluator:
     """Main evaluation class for model analysis and reporting."""
     
-    def __init__(self, model_dir: str, model_type: str, use_gpu: bool = True, color_theme: str = 'default'):
+    def __init__(self, model_dir: str, model_type: str, model_outputs_logits:bool = False, use_gpu: bool = True, color_theme: str = 'default'):
         self.model_dir = Path(model_dir)
         self.model_type = model_type
+        self.model_outputs_logits = model_outputs_logits
         self.use_gpu = use_gpu and torch.cuda.is_available()
         self.device = torch.device('cuda' if self.use_gpu else 'cpu')
         self.theme = ColorTheme(color_theme)
@@ -247,27 +248,23 @@ class ModelEvaluator:
         plt.savefig(self.figures_dir / 'performance_summary.png', dpi=300, bbox_inches='tight')
         plt.close()
     
-    def create_training_curves(self, analysis: Dict[str, Any]):
+    def create_training_curves(self, analysis: Dict[str, Any], data_type: str):
         """Create training curves visualization."""
         metrics_data = analysis['metrics_data']
         is_single = analysis['is_single_model']
         
         # Prepare data
-        all_train_f1 = []
-        all_train_loss = []
-        all_dev_f1 = []
-        all_dev_loss = []
+        all_train = []
+        all_dev = []
         
         max_epochs = 0
         
         for data in metrics_data:
             metrics = data['metrics']
-            all_train_f1.append(metrics['f1i'])
-            all_train_loss.append(metrics['lossi'])
-            all_dev_f1.append(metrics['devf1i'])
-            all_dev_loss.append(metrics['devlossi'])
+            all_train.append(metrics[f'{data_type}i'])
+            all_dev.append(metrics[f'dev{data_type}i'])
             
-            max_epochs = max(max_epochs, len(metrics['f1i']), len(metrics['devf1i']))
+            max_epochs = max(max_epochs, len(metrics[f'{data_type}i']), len(metrics[f'dev{data_type}i']))
         
         # Pad sequences to same length
         def pad_sequence(seq, target_length):
@@ -276,7 +273,7 @@ class ModelEvaluator:
             return seq[:target_length]
         
         # Create plots
-        fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(8, 18))
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10))
         
         epochs = list(range(1, max_epochs + 1))
         
@@ -285,14 +282,8 @@ class ModelEvaluator:
             data = metrics_data[0]
             metrics = data['metrics']
             
-            ax1.plot(epochs[:len(metrics['f1i'])], metrics['f1i'], 
-                    color=self.theme.theme['primary'], linewidth=2, label='Training F1')
-            ax2.plot(epochs[:len(metrics['lossi'])], metrics['lossi'], 
-                    color=self.theme.theme['secondary'], linewidth=2, label='Training Loss')
-            ax3.plot(epochs[:len(metrics['devf1i'])], metrics['devf1i'], 
-                    color=self.theme.theme['primary'], linewidth=2, label='Validation F1')
-            ax4.plot(epochs[:len(metrics['devlossi'])], metrics['devlossi'], 
-                    color=self.theme.theme['secondary'], linewidth=2, label='Validation Loss')
+            ax1.plot(epochs[:len(metrics[f'{data_type}i'])], metrics[f'{data_type}i'], color=self.theme.theme['primary'], linewidth=2, label=f'Training {data_type}')
+            ax2.plot(epochs[:len(metrics[f'dev{data_type}i'])], metrics[f'dev{data_type}i'], color=self.theme.theme['primary'], linewidth=2, label=f'Validation {data_type}')
             
         else:
             # Multiple models: individual curves + average
@@ -303,40 +294,30 @@ class ModelEvaluator:
             for i, data in enumerate(metrics_data):
                 metrics = data['metrics']
                 
-                ax1.plot(epochs[:len(metrics['f1i'])], metrics['f1i'], 
-                        color=color, alpha=0.6, linewidth=1)
-                ax2.plot(epochs[:len(metrics['lossi'])], metrics['lossi'], 
-                        color=color, alpha=0.6, linewidth=1)
-                ax3.plot(epochs[:len(metrics['devf1i'])], metrics['devf1i'], 
-                        color=color, alpha=0.6, linewidth=1)
-                ax4.plot(epochs[:len(metrics['devlossi'])], metrics['devlossi'], 
-                        color=color, alpha=0.6, linewidth=1)
+                ax1.plot(epochs[:len(metrics[f'{data_type}i'])], metrics[f'{data_type}i'], color=color, alpha=0.6, linewidth=1)
+                ax2.plot(epochs[:len(metrics[f'dev{data_type}i'])], metrics[f'dev{data_type}i'], color=color, alpha=0.6, linewidth=1)
+
             
             # Calculate and plot averages
-            avg_train_f1 = np.mean([pad_sequence(seq, max_epochs) for seq in all_train_f1], axis=0)
-            avg_train_loss = np.mean([pad_sequence(seq, max_epochs) for seq in all_train_loss], axis=0)
-            avg_dev_f1 = np.mean([pad_sequence(seq, max_epochs) for seq in all_dev_f1], axis=0)
-            avg_dev_loss = np.mean([pad_sequence(seq, max_epochs) for seq in all_dev_loss], axis=0)
+            avg_train = np.mean([pad_sequence(seq, max_epochs) for seq in all_train], axis=0)
+            avg_dev = np.mean([pad_sequence(seq, max_epochs) for seq in all_dev], axis=0)
             
-            ax1.plot(epochs, avg_train_f1, color=self.theme.theme['primary'], 
-                    linewidth=1.5, label='Average Training F1')
-            ax2.plot(epochs, avg_train_loss, color=self.theme.theme['secondary'], 
-                    linewidth=1.5, label='Average Training Loss')
-            ax3.plot(epochs, avg_dev_f1, color=self.theme.theme['primary'], 
-                    linewidth=1.5, label='Average Validation F1')
-            ax4.plot(epochs, avg_dev_loss, color=self.theme.theme['secondary'], 
-                    linewidth=1.5, label='Average Validation Loss')
+            ax1.plot(epochs, avg_train, color=self.theme.theme['primary'], linewidth=1.5, label=f'Average Training {data_type}')
+            ax2.plot(epochs, avg_dev, color=self.theme.theme['secondary'], linewidth=1.5, label=f'Average Validation {data_type}')
+            ax1.grid(True, alpha=0.3)
+            ax2.grid(True, alpha=0.3)
+
+
         
         # Styling
-        for ax, title in zip([ax1, ax2, ax3, ax4], 
-                           ['Training F1 Score', 'Training Loss', 'Validation F1 Score', 'Validation Loss']):
+        for ax, title in zip([ax1, ax2], [f'Training {data_type}', f'Validation {data_type}']):
             ax.set_xlabel('Epoch')
             ax.set_title(title)
             ax.grid(True, alpha=0.3)
             ax.legend()
         
         plt.tight_layout()
-        plt.savefig(self.figures_dir / 'training_curves.png', dpi=300, bbox_inches='tight')
+        plt.savefig(self.figures_dir / f'training_{data_type}_curves.png', dpi=300, bbox_inches='tight')
         plt.close()
     
     def find_best_models(self, analysis: Dict[str, Any]) -> Tuple[Path, Path]:
@@ -370,7 +351,7 @@ class ModelEvaluator:
             if model is None:
                 continue
             
-            y_pred = self.run_model_based_on_type(model, X, self.model_type)
+            y_pred = self.run_model_based_on_type(model, X, self.model_type, model_outputs_logits=self.model_outputs_logits)
             y_true = y.cpu().flatten().numpy()
             
             # Create confusion matrices
@@ -421,33 +402,10 @@ class ModelEvaluator:
             model = self.load_model(model_path)
             if model is None:
                 continue
-            
-            # # Get prediction probabilities
-            # with torch.no_grad():
-            #     outputs = model(X)
-            #     outputs = outputs.flatten()
-            #     # if outputs.dim() > 1 and outputs.size(1) > 1:
-            #     #     # Multi-class: use softmax
-            #     #     probs = torch.softmax(outputs, dim=1)
-            #     #     # For calibration, we'll use the probability of the true class
-            #     #     y_true = y.cpu().numpy()
-            #     #     y_prob = probs.cpu().numpy()
-            #     #     # Get probability of true class for each sample
-            #     #     prob_true = y_prob[range(len(y_true)), y_true]
-            #     #     # Convert to binary problem: high confidence (>0.5) vs low confidence
-            #     #     y_binary = (prob_true > 0.5).astype(int)
-            #     #     prob_pos = prob_true
-            #     # else:
 
-            #     # Binary classification
-            #     probs = torch.sigmoid(outputs).squeeze()
-
-            prob_pos = self.run_model_based_on_type(model, X, self.model_type)
+            prob_pos = self.run_model_based_on_type(model, X, self.model_type, model_outputs_logits=self.model_outputs_logits)
             y_binary = y.cpu().flatten().numpy()
-        
-            #  = y.cpu().numpy()
-            # prob_pos = probs.cpu().numpy()
-            # Create calibration curve
+
             try:
                 fraction_of_positives, mean_predicted_value = calibration_curve(
                     y_binary, prob_pos, n_bins=10
@@ -471,17 +429,22 @@ class ModelEvaluator:
         plt.savefig(self.figures_dir / 'calibration_curves.png', dpi=300, bbox_inches='tight')
         plt.close()
 
-    def run_model_based_on_type(self, model, X, type):
+    def run_model_based_on_type(self, model, X, type, model_outputs_logits):
         # Get predictions
         with torch.no_grad():
             outputs = model(X)
+
+        if type == 'binary_seg':
+            predictions = (outputs > 0.5).long().squeeze().flatten()
+            if model_outputs_logits:
+                predictions = torch.nn.functional.sigmoid(predictions)
+        else:
+            raise ValueError(f"For type: {type} we dont know how to format outputs. Please add in run_model_based_on_type")
         #     if outputs.dim() > 1 and outputs.size(1) > 1:
         #         predictions = torsch.argmax(outputs, dim=1)
         #     else:
-        predictions = (outputs > 0.5).long().squeeze()
-        
 
-        y_pred = predictions.cpu().flatten().numpy()
+        y_pred = predictions.cpu().numpy()
         return y_pred
             
     
@@ -544,8 +507,7 @@ The following models were evaluated with identical hyperparameters:
 
 \\begin{{itemize}}
 """
-        
-        for data in metrics_data:
+        for data in sorted(metrics_data, key=lambda x: x['model_name']):
             latex_content += f"\\item {data['model_name']}\n"
         
         latex_content += "\\end{itemize}\n\n"
@@ -592,13 +554,20 @@ The following models were evaluated with identical hyperparameters:
         latex_content += "\\caption{Performance Summary Visualization}\n\\end{figure}\n\n"
         
         # Training curves
-        latex_content += "\\newpage\n"
         latex_content += "\\section{Training Curves}\n\n"
-        latex_content += "The following plots show the training and validation curves for F1 score and loss metrics.\n\n"
+        latex_content += "The following plots show the training and dev curves for loss.\n\n"
+        latex_content += "\\newpage\n"
+
         
         latex_content += "\\begin{figure}[H]\n\\centering\n"
-        latex_content += "\\includegraphics[width=\\textwidth]{figures/training_curves.png}\n"
-        latex_content += "\\caption{Training and Validation Curves}\n\\end{figure}\n\n"
+        latex_content += "\\includegraphics[width=\\textwidth]{figures/training_loss_curves.png}\n"
+        latex_content += "\\caption{Training and Dev Curves}\n\\end{figure}\n\n"
+
+        latex_content += "\\newpage\n"
+        latex_content += "The following plots show the training and dev curves for F1 score.\n\n"
+        latex_content += "\\begin{figure}[H]\n\\centering\n"
+        latex_content += "\\includegraphics[width=\\textwidth]{figures/training_f1_curves.png}\n"
+        latex_content += "\\caption{Training and Dev Curves}\n\\end{figure}\n\n"
         
         # Confusion matrices
         latex_content += "\\newpage\n"
@@ -676,10 +645,10 @@ The following models were evaluated with identical hyperparameters:
         self.create_performance_plots(analysis)
         
         print("Creating training curves...")
-        self.create_training_curves(analysis)
+        self.create_training_curves(analysis, data_type='loss')
 
         print("Creating training curves...")
-        self.create_training_curves(analysis)
+        self.create_training_curves(analysis, data_type='f1')
         
         print("Creating confusion matrices...")
         self.create_confusion_matrices(analysis)
@@ -702,7 +671,8 @@ def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description='Evaluate models with identical hyperparameters')
     parser.add_argument('model_directory', help='Path to directory containing model subdirectories and config.toml')
-    parser.add_argument('-t', '--model_type')
+    parser.add_argument('-t', '--model_type', help='Type of model to format output properly options: {binary_seg}')
+    parser.add_argument('--model_outputs_logits', action='store_true', help='If the mode outputs logits and we need to sigmoid or softmax')
     parser.add_argument('--no-gpu', action='store_true', help='Force CPU-only evaluation')
     parser.add_argument('--colors', default='default', help='Color theme for visualizations')
     
@@ -713,6 +683,7 @@ def main():
         evaluator = ModelEvaluator(
             model_dir=args.model_directory,
             model_type=args.model_type,
+            model_outputs_logits=args.model_outputs_logits,
             use_gpu=not args.no_gpu,
             color_theme=args.colors
         )
