@@ -84,8 +84,9 @@ class ColorTheme:
 class ModelEvaluator:
     """Main evaluation class for model analysis and reporting."""
     
-    def __init__(self, model_dir: str, use_gpu: bool = True, color_theme: str = 'default'):
+    def __init__(self, model_dir: str, model_type: str, use_gpu: bool = True, color_theme: str = 'default'):
         self.model_dir = Path(model_dir)
+        self.model_type = model_type
         self.use_gpu = use_gpu and torch.cuda.is_available()
         self.device = torch.device('cuda' if self.use_gpu else 'cpu')
         self.theme = ColorTheme(color_theme)
@@ -275,7 +276,7 @@ class ModelEvaluator:
             return seq[:target_length]
         
         # Create plots
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+        fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(8, 18))
         
         epochs = list(range(1, max_epochs + 1))
         
@@ -295,20 +296,21 @@ class ModelEvaluator:
             
         else:
             # Multiple models: individual curves + average
-            colors = plt.cm.tab10(np.linspace(0, 1, len(metrics_data)))
+            # colors = plt.cm.tab10(np.linspace(0, 1, len(metrics_data)))
             
             # Plot individual curves with transparency
-            for i, (data, color) in enumerate(zip(metrics_data, colors)):
+            color = 'grey'
+            for i, data in enumerate(metrics_data):
                 metrics = data['metrics']
                 
                 ax1.plot(epochs[:len(metrics['f1i'])], metrics['f1i'], 
-                        color=color, alpha=0.7, linewidth=1)
+                        color=color, alpha=0.6, linewidth=1)
                 ax2.plot(epochs[:len(metrics['lossi'])], metrics['lossi'], 
-                        color=color, alpha=0.7, linewidth=1)
+                        color=color, alpha=0.6, linewidth=1)
                 ax3.plot(epochs[:len(metrics['devf1i'])], metrics['devf1i'], 
-                        color=color, alpha=0.7, linewidth=1)
+                        color=color, alpha=0.6, linewidth=1)
                 ax4.plot(epochs[:len(metrics['devlossi'])], metrics['devlossi'], 
-                        color=color, alpha=0.7, linewidth=1)
+                        color=color, alpha=0.6, linewidth=1)
             
             # Calculate and plot averages
             avg_train_f1 = np.mean([pad_sequence(seq, max_epochs) for seq in all_train_f1], axis=0)
@@ -360,24 +362,16 @@ class ModelEvaluator:
         # Determine number of classes
         num_classes = len(torch.unique(y))
         print(f'Num classes in y is: {num_classes}')
-        
+    
+
         # Process each model
         for model_path, model_name in [(best_loss_path, 'best_loss'), (best_f1_path, 'best_f1')]:
             model = self.load_model(model_path)
             if model is None:
                 continue
             
-            # Get predictions
-            with torch.no_grad():
-                outputs = model(X)
-            #     if outputs.dim() > 1 and outputs.size(1) > 1:
-            #         predictions = torch.argmax(outputs, dim=1)
-            #     else:
-            predictions = (outputs > 0.5).long().squeeze()
-            
-
+            y_pred = self.run_model_based_on_type(model, X, self.model_type)
             y_true = y.cpu().flatten().numpy()
-            y_pred = predictions.cpu().flatten().numpy()
             
             # Create confusion matrices
             cm = confusion_matrix(y_true, y_pred)
@@ -389,18 +383,22 @@ class ModelEvaluator:
             disp1 = ConfusionMatrixDisplay(cm, display_labels=range(num_classes))
             disp1.plot(ax=axes[0], cmap='Blues', colorbar=False)
             axes[0].set_title('Raw Counts')
+            axes[0].grid(False)
+
             
             # Normalized on true (recall perspective)
             cm_norm_true = confusion_matrix(y_true, y_pred, normalize='true')
             disp2 = ConfusionMatrixDisplay(cm_norm_true, display_labels=range(num_classes))
             disp2.plot(ax=axes[1], cmap='Blues', colorbar=False)
             axes[1].set_title('Normalized on True (Recall)')
+            axes[1].grid(False)
             
             # Normalized on pred (precision perspective)
             cm_norm_pred = confusion_matrix(y_true, y_pred, normalize='pred')
             disp3 = ConfusionMatrixDisplay(cm_norm_pred, display_labels=range(num_classes))
             disp3.plot(ax=axes[2], cmap='Blues', colorbar=False)
             axes[2].set_title('Normalized on Pred (Precision)')
+            axes[2].grid(False)
             
 
             plt.suptitle(f'Confusion Matrices - {model_name.replace("_", " ").title()} Model', fontsize=16)
@@ -424,27 +422,31 @@ class ModelEvaluator:
             if model is None:
                 continue
             
-            # Get prediction probabilities
-            with torch.no_grad():
-                outputs = model(X)
-                outputs = outputs.flatten()
-                # if outputs.dim() > 1 and outputs.size(1) > 1:
-                #     # Multi-class: use softmax
-                #     probs = torch.softmax(outputs, dim=1)
-                #     # For calibration, we'll use the probability of the true class
-                #     y_true = y.cpu().numpy()
-                #     y_prob = probs.cpu().numpy()
-                #     # Get probability of true class for each sample
-                #     prob_true = y_prob[range(len(y_true)), y_true]
-                #     # Convert to binary problem: high confidence (>0.5) vs low confidence
-                #     y_binary = (prob_true > 0.5).astype(int)
-                #     prob_pos = prob_true
-                # else:
+            # # Get prediction probabilities
+            # with torch.no_grad():
+            #     outputs = model(X)
+            #     outputs = outputs.flatten()
+            #     # if outputs.dim() > 1 and outputs.size(1) > 1:
+            #     #     # Multi-class: use softmax
+            #     #     probs = torch.softmax(outputs, dim=1)
+            #     #     # For calibration, we'll use the probability of the true class
+            #     #     y_true = y.cpu().numpy()
+            #     #     y_prob = probs.cpu().numpy()
+            #     #     # Get probability of true class for each sample
+            #     #     prob_true = y_prob[range(len(y_true)), y_true]
+            #     #     # Convert to binary problem: high confidence (>0.5) vs low confidence
+            #     #     y_binary = (prob_true > 0.5).astype(int)
+            #     #     prob_pos = prob_true
+            #     # else:
 
-                # Binary classification
-                probs = torch.sigmoid(outputs).squeeze()
-                y_binary = y.cpu().numpy()
-                prob_pos = probs.cpu().numpy()
+            #     # Binary classification
+            #     probs = torch.sigmoid(outputs).squeeze()
+
+            prob_pos = self.run_model_based_on_type(model, X, self.model_type)
+            y_binary = y.cpu().flatten().numpy()
+        
+            #  = y.cpu().numpy()
+            # prob_pos = probs.cpu().numpy()
             # Create calibration curve
             try:
                 fraction_of_positives, mean_predicted_value = calibration_curve(
@@ -468,14 +470,53 @@ class ModelEvaluator:
         plt.tight_layout()
         plt.savefig(self.figures_dir / 'calibration_curves.png', dpi=300, bbox_inches='tight')
         plt.close()
+
+    def run_model_based_on_type(self, model, X, type):
+        # Get predictions
+        with torch.no_grad():
+            outputs = model(X)
+        #     if outputs.dim() > 1 and outputs.size(1) > 1:
+        #         predictions = torsch.argmax(outputs, dim=1)
+        #     else:
+        predictions = (outputs > 0.5).long().squeeze()
+        
+
+        y_pred = predictions.cpu().flatten().numpy()
+        return y_pred
+            
     
+    def escape_latex(self, text):
+        """Escape special LaTeX characters in text."""
+        if text is None:
+            return ""
+        
+        text = str(text)
+        # Replace special LaTeX characters
+        replacements = {
+            '\\': r'\textbackslash{}',
+            '{': r'\{',
+            '}': r'\}',
+            '$': r'\$',
+            '&': r'\&',
+            '%': r'\%',
+            '#': r'\#',
+            '^': r'\textasciicircum{}',
+            '_': r'\_',
+            '~': r'\textasciitilde{}',
+        }
+        
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        
+        return text
+
     def generate_latex_report(self, analysis: Dict[str, Any]) -> str:
         """Generate LaTeX report content."""
-        metrics_data = analysis['metrics_data']
+        metrics_data = sorted(analysis['metrics_data'], key=lambda item: item['best_dev_loss'] )
         is_single = analysis['is_single_model']
         
         # Get model configuration
-        model_config = self.config['static']['model_hyperparams']
+        model_config = self.config
         
         latex_content = f"""\\documentclass{{article}}
 \\usepackage{{geometry}}
@@ -485,6 +526,7 @@ class ModelEvaluator:
 \\usepackage{{xcolor}}
 \\usepackage{{float}}
 \\usepackage{{subcaption}}
+\\usepackage{{array}}
 
 \\geometry{{margin=1in}}
 
@@ -514,8 +556,13 @@ The following models were evaluated with identical hyperparameters:
         latex_content += "\\begin{tabular}{ll}\n\\toprule\n"
         latex_content += "Parameter & Value \\\\\n\\midrule\n"
         
-        for param, value in model_config.items():
-            latex_content += f"{param} & {value} \\\\\n"
+        for sub_dict in model_config.items():
+            for param, value in sub_dict[1].items():
+                param, value = self.escape_latex(param), self.escape_latex(value)
+                if len(str(value)) > 80:
+                    latex_content += f"{param} & \\parbox{{10cm}}{{\\texttt{{{value}}}}} \\\\\n"
+                else:
+                    latex_content += f"{param} & {value} \\\\\n"
         
         latex_content += "\\bottomrule\n\\end{tabular}\n"
         latex_content += "\\caption{Model Hyperparameters}\n\\end{table}\n\n"
@@ -538,11 +585,14 @@ The following models were evaluated with identical hyperparameters:
             latex_content += "\\bottomrule\n\\end{tabular}\n"
             latex_content += "\\caption{Performance Summary Across All Models}\n\\end{table}\n\n"
         
+        latex_content += "\\newpage\n"
+
         latex_content += "\\begin{figure}[H]\n\\centering\n"
         latex_content += "\\includegraphics[width=\\textwidth]{figures/performance_summary.png}\n"
         latex_content += "\\caption{Performance Summary Visualization}\n\\end{figure}\n\n"
         
         # Training curves
+        latex_content += "\\newpage\n"
         latex_content += "\\section{Training Curves}\n\n"
         latex_content += "The following plots show the training and validation curves for F1 score and loss metrics.\n\n"
         
@@ -551,6 +601,7 @@ The following models were evaluated with identical hyperparameters:
         latex_content += "\\caption{Training and Validation Curves}\n\\end{figure}\n\n"
         
         # Confusion matrices
+        latex_content += "\\newpage\n"
         latex_content += "\\section{Confusion Matrix Analysis}\n\n"
         latex_content += "Confusion matrices are shown for the models with the best validation loss and F1 score.\n\n"
         
@@ -558,14 +609,17 @@ The following models were evaluated with identical hyperparameters:
         
         latex_content += "\\begin{figure}[H]\n\\centering\n"
         latex_content += "\\includegraphics[width=\\textwidth]{figures/confusion_matrix_best_loss.png}\n"
-        latex_content += f"\\caption{{Confusion Matrix for Best Loss Model ({best_loss_path.name})}}\n\\end{figure}\n\n"
+        latex_content += f"\\caption{{Confusion Matrix for Best Loss Model ({best_loss_path.name})}}"+"\n\\end{figure}\n\n"
         
         if best_f1_path != best_loss_path:
             latex_content += "\\begin{figure}[H]\n\\centering\n"
             latex_content += "\\includegraphics[width=\\textwidth]{figures/confusion_matrix_best_f1.png}\n"
-            latex_content += f"\\caption{{Confusion Matrix for Best F1 Model ({best_f1_path.name})}}\n\\end{figure}\n\n"
+            latex_content += f"\\caption{{Confusion Matrix for Best F1 Model ({best_f1_path.name})}}"+"\n\\end{figure}\n\n"
+        else:
+            latex_content += "\\textbf{Best Loss model is the same and Best F1 model so we just show one.}"
         
         # Calibration analysis
+        latex_content += "\\newpage\n"
         latex_content += "\\section{Calibration Analysis}\n\n"
         latex_content += "Calibration curves show how well the predicted probabilities match the actual outcomes.\n\n"
         
@@ -599,7 +653,9 @@ The following models were evaluated with identical hyperparameters:
                 print(f"PDF report generated successfully: {pdf_file}")
                 return True
             else:
-                print(f"LaTeX compilation failed: {result.stderr}")
+                print(f"LaTeX compilation failed with return code: {result.returncode}")
+                print(f"STDOUT: {result.stdout}")
+                print(f"STDERR: {result.stderr}")
                 return False
                 
         except FileNotFoundError:
@@ -619,6 +675,9 @@ The following models were evaluated with identical hyperparameters:
         print("Creating performance plots...")
         self.create_performance_plots(analysis)
         
+        print("Creating training curves...")
+        self.create_training_curves(analysis)
+
         print("Creating training curves...")
         self.create_training_curves(analysis)
         
@@ -643,14 +702,17 @@ def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description='Evaluate models with identical hyperparameters')
     parser.add_argument('model_directory', help='Path to directory containing model subdirectories and config.toml')
+    parser.add_argument('-t', '--model_type')
     parser.add_argument('--no-gpu', action='store_true', help='Force CPU-only evaluation')
     parser.add_argument('--colors', default='default', help='Color theme for visualizations')
     
     args = parser.parse_args()
+    print(args.model_type)
     
     try:
         evaluator = ModelEvaluator(
             model_dir=args.model_directory,
+            model_type=args.model_type,
             use_gpu=not args.no_gpu,
             color_theme=args.colors
         )
