@@ -75,6 +75,7 @@ class ExperimentBuilder():
     def _setup_static_run(self):
         train_run_config = {
             'epochs': self.static['epochs'] ,
+            'patience': self.sweep['patience'], 
             'plot_freq': self.meta_data['plot_freq'],
             'model': self._build_model_config(self.static['model'] ),
             'optimizer': self._build_optimizer_config(self.static['optimizer'] ),
@@ -88,6 +89,7 @@ class ExperimentBuilder():
         
         train_run_config = {
             'epochs': self.sweep['epochs'] ,
+            'patience': self.sweep['patience'],
             'plot_freq': self.meta_data['plot_freq'],
             'model': self._build_model_config(self.sweep['model'] ),
             'optimizer': self._build_optimizer_config(self.sweep['optimizer'] ),
@@ -125,6 +127,7 @@ class ExperimentBuilder():
         for combo in combinations:
             train_run_config = {
                 'epochs': self.sweep['epochs'] ,
+                'patience': self.sweep['patience'],
                 'plot_freq': self.meta_data['plot_freq'],
                 'model': self._build_model_config(self.sweep['model'] ),
                 'optimizer': self._build_optimizer_config(self.sweep['optimizer'] ),

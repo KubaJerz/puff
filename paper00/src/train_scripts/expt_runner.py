@@ -44,7 +44,7 @@ class Expt_Runner():
                 gpu_idx, name = self.available_gpu_list.pop(0)
                 train_run_config = self.sub_runs_list.pop(0)
 
-                train_loop =  Train_Loop(save_dir=f'{self.expt_dir}/{run_id}', epochs=train_run_config['epochs'], device=f'cuda:{gpu_idx}', plot_freq=train_run_config['plot_freq'])
+                train_loop =  Train_Loop(save_dir=f'{self.expt_dir}/{run_id}', epochs=train_run_config['epochs'], device=f'cuda:{gpu_idx}', plot_freq=train_run_config['plot_freq'], patience=train_run_config['patience'])
                 model, optimizer, criterion, train_loader, dev_loader, test_loader = self._setup_train_objs(train_run_config)
                 self._save_train_run_config(config=train_run_config, save_dir=f'{self.expt_dir}/{run_id}')
                 p = mp.Process(target=train_loop.train, args=(model, optimizer, criterion, train_loader, dev_loader, test_loader))

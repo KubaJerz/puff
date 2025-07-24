@@ -671,7 +671,7 @@ def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description='Evaluate models with identical hyperparameters')
     parser.add_argument('model_directory', help='Path to directory containing model subdirectories and config.toml')
-    parser.add_argument('-t', '--model_type', help='Type of model to format output properly options: {binary_seg}')
+    parser.add_argument('-t', '--model_type', required=True, help='Type of model to format output properly options: {binary_seg}')
     parser.add_argument('--model_outputs_logits', action='store_true', help='If the mode outputs logits and we need to sigmoid or softmax')
     parser.add_argument('--no-gpu', action='store_true', help='Force CPU-only evaluation')
     parser.add_argument('--colors', default='default', help='Color theme for visualizations')
