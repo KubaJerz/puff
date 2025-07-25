@@ -5,3 +5,6 @@ __pycache__/
 name_to_id.txt
 *.json
 *.png
+
+experiments/*
+experiments/
