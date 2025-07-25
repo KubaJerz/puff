@@ -1,6 +1,0 @@
-We split across sessions.
-For particaptes ....
-
-then we train a model so that it can help with labels.
-
-no test set beasue we will jsut test on unlabeld data in the app and close the loop that way 
