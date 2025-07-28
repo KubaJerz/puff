@@ -35,7 +35,7 @@ class Expt_Runner():
             So if 2 GPUS they fully train then we do the next two.
         """
     
-        mp.set_start_method('spawn') #, force=True) #This atart method works better with CUDA
+        mp.set_start_method('spawn', force=True) #This atart method works better with CUDA
 
         processes = []
         run_id = 0
