@@ -112,18 +112,46 @@ class Expt_Runner():
             sys.path.insert(0, module_dir)
             module = importlib.import_module(module_name)
             model_class = getattr(module, "Model")
-            return model_class(**model_params)
+            model = model_class(**model_params)
         else:
             # If specifying full module path to model class
             model_class = self._load_class_from_str(model_path)
-            return model_class(**model_params)
+            model = model_class(**model_params)
+
+        # Check for pre-trained weights
+        if model_config.get("model_weights") is not None:
+            weights_path = model_config["model_weights"]
+            print(f"{'\033[32m'}Loading model weights{'\033[0m'}, from {weights_path}")
+            try:
+                state_dict = torch.load(weights_path, weights_only=True)
+                model.load_state_dict(state_dict)
+            except (FileNotFoundError, RuntimeError, Exception) as e:
+                raise RuntimeError(f"Failed to load model weights from {weights_path}: {e}")
+        else:
+            print(f"{'\033[33m'}NOT loading model weights{'\033[0m'}, No 'model_weights' path found.")
+
+        return model
 
 
     def _setup_optimizer(self, opt_config, model_params):
         opt_class_str = opt_config["optimizer"]
         opt_params = opt_config.get("optimizer_params", {})
         opt_class = self._load_class_from_str(opt_class_str)
-        return opt_class(model_params, **opt_params)
+        optimizer = opt_class(model_params, **opt_params)
+
+        # Check for optimizer state
+        if opt_config.get("optimizer_weights") is not None:
+            weights_path = opt_config["optimizer_weights"]
+            print(f"{'\033[32m'}Loading optimizer saved state{'\033[0m'}, from {weights_path}")
+            try:
+                state_dict = torch.load(weights_path, weights_only=True)
+                optimizer.load_state_dict(state_dict)
+            except (FileNotFoundError, RuntimeError, Exception) as e:
+                raise RuntimeError(f"Failed to load optimizer state from {weights_path}: {e}")
+        else:
+            print(f"{'\033[33m'}NOT loading optimizer saved state{'\033[0m'}, No 'optimizer_weights' path found.")
+
+        return optimizer
 
 
     def _setup_criterion(self, crit_config):
@@ -146,8 +174,7 @@ class Expt_Runner():
         use_test = data_config.get("use_test")
 
         def load_dataset_from_dir(path, type):
-            X, y  = torch.load(os.path.join(path, f"{type}.pt"))
-            # y = torch.load(os.path.join(path, f"y_{type}.pt"))
+            X, y  = torch.load(os.path.join(path, f"{type}.pt"), weights_only=True)
             dataset = torch.utils.data.TensorDataset(X, y)
             return dataset
 
