@@ -48,6 +48,7 @@ class ExperimentBuilder():
         self.meta_data = config['meta_data']       
         base_dir = self.meta_data['expt_dir']
         expt_name = self.meta_data['name']
+        print(base_dir,'   ..........')
 
         #make experiment dir 
         self.expt_dir = os.path.join(base_dir, f"{expt_name}")
@@ -176,8 +177,10 @@ class ExperimentBuilder():
         # Handle model weights loading
         if 'model_weights' in model_section and model_section['model_weights'] is not None and model_section['model_weights'] != '':
             config['model_weights'] = model_section['model_weights']
+            print(f"{'\033[32m'}Loading model weights{'\033[0m'}, from {model_section['model_weights']}.")
         else:
             config['model_weights'] = None
+            print(f"{'\033[33m'}NOT loading model weights{'\033[0m'}, No 'model_weights' path found.")
         
         for key, value in model_section.items():
             if key not in ['model_path', 'model_weights']:
@@ -195,8 +198,10 @@ class ExperimentBuilder():
         # Handle optimizer weights loading
         if 'optimizer_weights' in optimizer_section and optimizer_section['optimizer_weights'] is not None and optimizer_section['optimizer_weights'] != '':
             config['optimizer_weights'] = optimizer_section['optimizer_weights']
+            print(f"{'\033[33m'}Loading optimizer saved state{'\033[0m'}, from {optimizer_section['optimizer_weights']}.")
         else:
             config['optimizer_weights'] = None
+            print(f"{'\033[33m'}NOT loading optimizer saved state{'\033[0m'}, No 'optimizer_weights' path found.")
 
         
         for key, value in optimizer_section.items():

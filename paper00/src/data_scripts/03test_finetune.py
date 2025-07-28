@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-test_finetune.py
+03test_finetune.py
 
 A script for processing old training data and creating new train/dev/test splits
 for fine-tuning experiments. Can be run standalone or imported as a module.
@@ -287,8 +287,8 @@ def _print_success_summary(config_info: Dict[str, Any]) -> None:
 if __name__ == "__main__":
     # Hardcoded parameters for standalone execution
     OLD_DATA_PATH = "/home/kuba/Desktop/k-fold/fold-0/data"
-    NEW_EXPERIMENT_PATH = "/home/kuba/projects/puff/test/experiments/test_custom_finetune"
-    PERCENT_OLD_TRAIN = 0.75
+    NEW_EXPERIMENT_PATH = "/home/kuba/projects/puff/test/experiments/01test_custom_finetune"
+    PERCENT_OLD_TRAIN = 0.50
     TEST_SPLIT_RATIO = 1/3
     
     try:
