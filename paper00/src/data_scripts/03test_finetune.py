@@ -177,8 +177,14 @@ def _create_new_training_set(old_train_data: Tuple[torch.Tensor, torch.Tensor],
     old_train_subset_y = old_train_y[indices]
     
     # Combine old subset with new addition
-    new_train_X = torch.cat([old_train_subset_X, addition_X])
-    new_train_y = torch.cat([old_train_subset_y, addition_y])
+    combined_X = torch.cat([old_train_subset_X, addition_X])
+    combined_y = torch.cat([old_train_subset_y, addition_y])
+    
+    # SHUFFLE THE FINAL COMBINED DATASET
+    total_samples = combined_X.shape[0]
+    shuffle_indices = torch.randperm(total_samples)
+    new_train_X = combined_X[shuffle_indices]
+    new_train_y = combined_y[shuffle_indices]
     
     print(f"✓ Created new training set: {samples_to_take} from old train + {addition_X.shape[0]} from test split = {new_train_X.shape[0]} total")
     

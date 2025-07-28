@@ -6,6 +6,7 @@ import os
 import importlib
 import sys
 import toml
+import json
 
 class Expt_Runner():
     def __init__(self, expt_dir, sub_runs_list, run_on_gpu):
@@ -125,12 +126,67 @@ class Expt_Runner():
             try:
                 state_dict = torch.load(weights_path, weights_only=True)
                 model.load_state_dict(state_dict)
+                
+                # Auto-discover and load corresponding metrics file
+                self._load_and_save_metrics(weights_path)
+                
             except (FileNotFoundError, RuntimeError, Exception) as e:
                 raise RuntimeError(f"Failed to load model weights from {weights_path}: {e}")
         else:
             print(f"{'\033[33m'}NOT loading model weights{'\033[0m'}, No 'model_weights' path found.")
 
         return model
+
+    def _load_and_save_metrics(self, weights_path):
+        """
+        Automatically find, load, and save corresponding metrics JSON file when loading pre-trained weights.
+        """
+        try:
+            # Extract directory and base filename
+            weights_dir = os.path.dirname(weights_path)
+            weights_filename = os.path.basename(weights_path)
+            
+            # Convert model filename to metrics filename
+            # Replace '_model.pt' with '_metrics.json'
+            if weights_filename.endswith('_model.pt'):
+                base_name = weights_filename.replace('_model.pt', '')
+                metrics_filename = f"{base_name}_metrics.json"
+            else:
+                # Fallback: just replace .pt with .json
+                base_name = os.path.splitext(weights_filename)[0]
+                metrics_filename = f"{base_name}.json"
+            
+            # Construct path to metrics file
+            metrics_path = os.path.join(weights_dir, metrics_filename)
+            
+            # Check if metrics file exists
+            if not os.path.exists(metrics_path):
+                print(f"{'\033[31m'}Old metrics file not found: {metrics_path}{'\033[0m'}")
+                return
+            
+            # Try to load the JSON file
+            try:
+                with open(metrics_path, 'r') as f:
+                    metrics_data = json.load(f)
+            except (json.JSONDecodeError, Exception) as e:
+                print(f"{'\033[31m'}Failed to load old metrics from {metrics_path}: {e}{'\033[0m'}")
+                return
+            
+            # Prepare destination path with 'old_' prefix
+            old_metrics_filename = f"old_{metrics_filename}"
+            destination_path = os.path.join(self.expt_dir, old_metrics_filename)
+            
+            # Try to save the metrics to the new location
+            try:
+                with open(destination_path, 'w') as f:
+                    json.dump(metrics_data, f, indent=2)
+                print(f"Old metrics successfully moved as {old_metrics_filename}")
+            except Exception as e:
+                print(f"{'\033[31m'}Failed to save old metrics to {destination_path}: {e}{'\033[0m'}")
+                return
+                
+        except Exception as e:
+            print(f"{'\033[31m'}Unexpected error in loading old metrics: {e}{'\033[0m'}")
 
 
     def _setup_optimizer(self, opt_config, model_params):
