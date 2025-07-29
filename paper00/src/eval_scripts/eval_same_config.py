@@ -131,6 +131,21 @@ class ModelEvaluator:
         
         return sorted(subdirs)
     
+    def _has_old_metrics(self) -> bool:
+        """Check if old_best_dev_metrics.json exists in main model directory."""
+        old_metrics_file = self.model_dir / 'old_best_dev_metrics.json'
+        return old_metrics_file.exists()
+    
+    def load_old_metrics(self) -> Dict[str, List[float]]:
+        """Load metrics from old_best_dev_metrics.json in main model directory."""
+        old_metrics_file = self.model_dir / 'old_best_dev_metrics.json'
+        try:
+            with open(old_metrics_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading old metrics from {old_metrics_file}: {e}")
+            return {}
+    
     def load_model(self, model_subdir: Path):
         """Load a model from the specified subdirectory."""
         # Dynamic model loading
@@ -138,6 +153,8 @@ class ModelEvaluator:
         # model_class_name = self.config['static']['model']['model_class_name']
         model_hyperparams = (self.config['static']['model']).copy()
         del model_hyperparams['model_path']
+        if 'model_weights' in model_hyperparams:
+            del model_hyperparams['model_weights']
         
         # Import model module
         module_dir = os.path.dirname(model_path)
@@ -320,6 +337,86 @@ class ModelEvaluator:
         plt.savefig(self.figures_dir / f'training_{data_type}_curves.png', dpi=300, bbox_inches='tight')
         plt.close()
     
+    def create_combined_training_curves(self, analysis: Dict[str, Any], data_type: str):
+        """Create combined training curves with old and new metrics."""
+        # Only execute in single model mode
+        if not analysis['is_single_model']:
+            return
+        
+        # Load old metrics
+        old_metrics = self.load_old_metrics()
+        if not old_metrics:
+            print(f"Could not load old metrics for combined {data_type} curves")
+            return
+        
+        # Get current metrics from first (and only) model
+        current_metrics = analysis['metrics_data'][0]['metrics']
+        
+        # Check if required keys exist in both old and current metrics
+        train_key = f'{data_type}i'
+        dev_key = f'dev{data_type}i'
+        
+        if train_key not in old_metrics or dev_key not in old_metrics:
+            print(f"Old metrics missing required keys for {data_type}")
+            return
+        
+        if train_key not in current_metrics or dev_key not in current_metrics:
+            print(f"Current metrics missing required keys for {data_type}")
+            return
+        
+        # Handle empty arrays gracefully
+        old_train = old_metrics[train_key] if old_metrics[train_key] else []
+        old_dev = old_metrics[dev_key] if old_metrics[dev_key] else []
+        current_train = current_metrics[train_key] if current_metrics[train_key] else []
+        current_dev = current_metrics[dev_key] if current_metrics[dev_key] else []
+        
+        # Concatenate old and new metrics
+        combined_train = old_train + current_train
+        combined_dev = old_dev + current_dev
+        
+        if not combined_train and not combined_dev:
+            print(f"No data available for combined {data_type} curves")
+            return
+        
+        # Calculate transition point
+        transition_point = len(old_train) + 0.5 if old_train else 0.5
+        
+        # Create epoch numbers
+        total_epochs = max(len(combined_train), len(combined_dev))
+        epochs = list(range(1, total_epochs + 1))
+        
+        # Create plots
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10))
+        
+        # Plot training curve
+        if combined_train:
+            ax1.plot(epochs[:len(combined_train)], combined_train, 
+                    color=self.theme.theme['primary'], linewidth=2, label=f'Training {data_type}')
+        
+        # Plot dev curve
+        if combined_dev:
+            ax2.plot(epochs[:len(combined_dev)], combined_dev, 
+                    color=self.theme.theme['primary'], linewidth=2, label=f'Validation {data_type}')
+        
+        # Add vertical line at transition point
+        if len(old_train) > 0 or len(old_dev) > 0:
+            for ax in [ax1, ax2]:
+                ax.axvline(x=transition_point, color=self.theme.theme['accent'], 
+                          linestyle='--', linewidth=2, alpha=0.8, label='Metric Transition')
+        
+        # Styling
+        for ax, title in zip([ax1, ax2], [f'Combined Training {data_type}', f'Combined Validation {data_type}']):
+            ax.set_xlabel('Epoch')
+            ax.set_title(title)
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+        
+        plt.tight_layout()
+        plt.savefig(self.figures_dir / f'combined_training_{data_type}_curves.png', dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"Created combined {data_type} curves with {len(old_train)} old + {len(current_train)} new training epochs")
+    
     def find_best_models(self, analysis: Dict[str, Any]) -> Tuple[Path, Path]:
         """Find models with best validation loss and F1 score."""
         metrics_data = analysis['metrics_data']
@@ -473,6 +570,7 @@ class ModelEvaluator:
         
         return text
 
+
     def generate_latex_report(self, analysis: Dict[str, Any]) -> str:
         """Generate LaTeX report content."""
         metrics_data = sorted(analysis['metrics_data'], key=lambda item: item['best_dev_loss'] )
@@ -568,6 +666,21 @@ The following models were evaluated with identical hyperparameters:
         latex_content += "\\begin{figure}[H]\n\\centering\n"
         latex_content += "\\includegraphics[width=\\textwidth]{figures/training_f1_curves.png}\n"
         latex_content += "\\caption{Training and Dev Curves}\n\\end{figure}\n\n"
+
+        if is_single and self._has_old_metrics():
+
+            latex_content += "\\newpage\n"
+            latex_content += "The following plots show the training and dev curves for Loss with the vertical line delineating pre and post customization.\n\n"
+            latex_content += "\\begin{figure}[H]\n\\centering\n"
+            latex_content += "\\includegraphics[width=\\textwidth]{figures/combined_training_loss_curves.png}\n"
+            latex_content += "\\caption{Training and Dev Curves with the vertical line delineating pre and post customization.}\n\\end{figure}\n\n"
+
+            latex_content += "\\newpage\n"
+            latex_content += "The following plots show the training and dev curves for F1 score with the vertical line delineating pre and post customization.\n\n"
+            latex_content += "\\begin{figure}[H]\n\\centering\n"
+            latex_content += "\\includegraphics[width=\\textwidth]{figures/combined_training_f1_curves.png}\n"
+            latex_content += "\\caption{Training and Dev Curves with the vertical line delineating pre and post customization.}\n\\end{figure}\n\n"
+
         
         # Confusion matrices
         latex_content += "\\newpage\n"
@@ -646,9 +759,10 @@ The following models were evaluated with identical hyperparameters:
         
         print("Creating training curves...")
         self.create_training_curves(analysis, data_type='loss')
-
-        print("Creating training curves...")
         self.create_training_curves(analysis, data_type='f1')
+        self.create_combined_training_curves(analysis, data_type='loss')
+        self.create_combined_training_curves(analysis, data_type='f1')
+
         
         print("Creating confusion matrices...")
         self.create_confusion_matrices(analysis)
