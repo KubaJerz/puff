@@ -6,17 +6,17 @@ PARTICIPANT_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 TRAIN_PERCENT = 0.6
 DEV_PERCENT = 0.2
 TEST_PERCENT = 1 - TRAIN_PERCENT - DEV_PERCENT
-SAVE_DIR = '/home/kuba/projects/puff/paper00/experiments/00/data'
+SAVE_DIR = '/home/kuba/projects/puff/paper00/experiments/00-par-split/data'
 
 # Create configuration
 config = create_base_config(
     target_labels=['puff', 'puffs'],
     window_size=1024,
     step_size=1024,
-    use_gyro=False,
+    use_gyro=True,
     random_seed=70,
     percent_negative_windows=0.5,
-    threshold_gap_minutes=30,
+    threshold_gap_minutes=5,
     label_value=1
 )
 
