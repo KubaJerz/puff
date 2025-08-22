@@ -101,6 +101,18 @@ optimizer = "torch.optim.Adam"
 # optimizer_weights = "path/to/saved/optim_state.pt" (OPTIONAL)
 lr = 0.0001
 
+# Scheduler configuration
+scheduler = "torch.optim.lr_scheduler.StepLR"
+step_size = 30
+gamma = 0.1
+
+# or example ReduceLROnPlateau scheduler
+scheduler = "torch.optim.lr_scheduler.ReduceLROnPlateau"
+mode = "min"
+factor = 0.5
+patience = 5
+threshold = 1e-4
+
 [static.criterion]
 criterion = "/home/kuba/projects/puff/test/loss.DiceBCELoss"
 
@@ -140,6 +152,7 @@ in_channels = 3
 
 [sweep.optimizer]
 optimizer = "torch.optim.Adam"
+scheduler = "torch.optim.lr_scheduler.StepLR"
 
 
 [sweep.criterion]
@@ -160,6 +173,8 @@ dropout = [0.1, 0.2, 0.3, 0.5]
 lr = [0.0001, 0.001, 0.0003]
 batch_size = [16, 32, 64, 128, 256]
 weight_decay = [0.0, 1e-5, 1e-4, 1e-3]
+step_size = [10, 20, 30]
+gamma = [0.1, 0.5, 0.9]
 ```
 
 **NOTE:** For the `sweep.search_space` you might need to modify the `_apply_sampled_params` method in `experiment_builder.py` if the mapping as not been added before. 
