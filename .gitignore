@@ -5,6 +5,7 @@ __pycache__/
 name_to_id.txt
 *.json
 *.png
+*.env
 
 experiments/*
 experiments/
