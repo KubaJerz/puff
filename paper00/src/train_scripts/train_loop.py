@@ -11,7 +11,7 @@ class SaveMode(Enum):
     JUST_MODEL_AND_METRICS = auto()
 
 class Train_Loop():
-    def __init__(self, save_dir, epochs, device='cpu', plot_freq=3, autosave_freq=10, patience=10):
+    def __init__(self, save_dir, epochs, device='cpu', plot_freq=3, autosave_freq=10, patience=10, scheduler=None):
         """
         Initializes a new TrainLoop instance.
 
@@ -20,6 +20,7 @@ class Train_Loop():
             plot_freq (int): After how many epochs to plot 
             autosave_freq (int): after how many epochs to save automatically
             patience (int): dev set loss patience
+            scheduler: Optional learning rate scheduler
 
         """
         self.has_run = False
@@ -30,9 +31,9 @@ class Train_Loop():
         self.save_dir = save_dir
         self.epochs = epochs
         self.curr_epoch = 0 
+        self.scheduler = scheduler
 
         os.mkdir(self.save_dir)
-
 
         #plotting metrics
         self.lossi = []
@@ -57,16 +58,13 @@ class Train_Loop():
         self.best_f1_idx = None
         self.best_dev_f1_idx = None
 
-
         # early stopping
         self.epochs_without_improvement = 0
         # self.best_model_state = None
 
-
         self.train_f1 = BinaryF1Score().to(device)
         self.dev_f1 = BinaryF1Score().to(device)
         self.test_f1 = BinaryF1Score().to(device)
-
 
     def train(self, model, optimizer, criterion, train_loader, dev_loader, test_loader=None):
         assert not self.has_run, "Training loop already executed. Create new instance."
@@ -108,11 +106,9 @@ class Train_Loop():
                     total_dev_loss += dev_loss.item()
                     self.dev_f1(dev_pred, dev_y_batch) #we assume (Batch x Seq Len)
 
-
                 self.devlossi.append(total_dev_loss / len(dev_loader)) #append avg loss over dev  batches
                 self.devf1i.append(self.dev_f1.compute().item()) #append  f1 over dev  batches
                 self.dev_f1.reset()
-
 
             # TEST
             if test_loader:
@@ -125,36 +121,40 @@ class Train_Loop():
                         total_test_loss += test_loss.item()
                         self.test_f1(test_pred, test_y_batch) #we assume (Batch x Seq Len)
 
-
                     self.testlossi.append(total_test_loss / len(test_loader)) #append avg loss over test  batches
                     self.testf1i.append(self.test_f1.compute().item()) #append  f1 over test  batches
                     self.test_f1.reset()
 
+            # SCHEDULER STEP - After validation loop
+            if self.scheduler is not None:
+                # Special handling for ReduceLROnPlateau
+                if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    self.scheduler.step(self.devlossi[-1])
+                else:
+                    self.scheduler.step()
 
             # UPDATES
             self._update_best_metrics()
             self._update_early_stop()
 
-            pbar.set_description(f"Device:{self.device} curr Loss: {self.lossi[-1]:.4f}, curr Dev Loss: {self.devlossi[-1]:.4f}")
+            # Get current learning rate for display
+            current_lr = optimizer.param_groups[0]['lr']
+            pbar.set_description(f"Device:{self.device} curr Loss: {self.lossi[-1]:.4f}, curr Dev Loss: {self.devlossi[-1]:.4f}, LR: {current_lr:.2e}")
 
             # CHECKS
             if self._is_best():
-                self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, name='best_dev_')
+                self._save(model=model, optimizer=optimizer, mode=SaveMode.JUST_MODEL_AND_METRICS, name='best_dev_')
 
             if self._should_plot():
                 self._do_plot()
 
-
             if self._should_early_stop():
-                self._do_early_stop(model=model)
+                self._do_early_stop(model=model, optimizer=optimizer)
                 self._do_plot()
                 break
 
             if self._should_autosave():
                 self._do_auto_save(model=model, optimizer=optimizer)
-
-            
-        
 
         #PLOT ON END
         self._do_plot()
@@ -176,7 +176,6 @@ class Train_Loop():
         if self.devf1i[-1] > self.best_dev_f1:
             self.best_dev_f1 = self.devf1i[-1]
             self.best_dev_f1_idx = len(self.devf1i) - 1
-
 
     def _update_early_stop(self):
         if self.devlossi[-1] == self.best_dev_loss: #we assume if == then its becasue it was jsut updated to be best metric
@@ -218,7 +217,6 @@ class Train_Loop():
     def _should_autosave(self):
         return (self.curr_epoch % self.autosave_freq == 0)
 
-
     def _do_plot(self):
         self._update_plotting_metrics()
 
@@ -230,16 +228,13 @@ class Train_Loop():
         plt.plot(self.moving_mean_lossi, alpha=0.55, color="#346beb");
         plt.plot(self.moving_mean_devlossi, alpha=0.55, color="#eb7734"); 
 
-
         plt.scatter(self.best_loss_idx, self.best_loss, color="black", s=20, marker='v', zorder=6 )
         plt.scatter(self.best_dev_loss_idx, self.best_dev_loss, color="black", s=20, marker='v', zorder=6)
-
 
         plt.grid(True, axis='both', alpha=0.7)
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
         plt.legend()
-
 
         plt.subplot(2, 1, 2)
 
@@ -247,7 +242,6 @@ class Train_Loop():
         plt.plot(self.devf1i, color="#eb7734", label=f'Dev F1; max={self.best_dev_f1:0.2f}')
         plt.plot(self.moving_mean_f1i, alpha=0.55, color="#346beb");
         plt.plot(self.moving_mean_devf1i , alpha=0.55, color="#eb7734"); 
-
 
         plt.scatter(self.best_f1_idx, self.best_f1, color="black", s=20, marker='v', zorder=6 )
         plt.scatter(self.best_dev_f1_idx, self.best_dev_f1, color="black", s=20, marker='v', zorder=6)
@@ -261,14 +255,14 @@ class Train_Loop():
         plt.savefig(os.path.join(self.save_dir,f"metrics.png"))
         plt.close()
 
-    def _do_early_stop(self, model):
+    def _do_early_stop(self, model, optimizer):
         print(f"{self.device} Early stopping at epoch {self.curr_epoch}")
-        self._save(model=model, mode=SaveMode.JUST_MODEL_AND_METRICS, optimizer=None, name=f'earlystop_{self.curr_epoch}_')
+        self._save(model=model, optimizer=None, mode=SaveMode.JUST_MODEL_AND_METRICS, name=f'earlystop_{self.curr_epoch}_')
 
     def _do_auto_save(self, model, optimizer):
         self._save(model=model, optimizer=optimizer, mode=SaveMode.CHECKPOINT, name='autosave_')
 
-    def _save(self, model, mode: SaveMode, optimizer=None, name=''):
+    def _save(self, model, optimizer, mode: SaveMode, name=''):
             if mode == SaveMode.CHECKPOINT:
                 checkpoint = {
                     'epoch': self.curr_epoch,
@@ -281,6 +275,11 @@ class Train_Loop():
                     'devf1i': self.devf1i,
                     'testf1i': self.testf1i
                 }
+                
+                # Include scheduler state if present
+                if self.scheduler is not None:
+                    checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
+                
                 torch.save(checkpoint, f"{self.save_dir}/{name}checkpoint.pt")
 
             elif mode == SaveMode.JUST_MODEL_AND_METRICS:
