@@ -44,7 +44,6 @@ class ExperimentBuilder():
         except tomllib.TOMLDecodeError as e:
             raise ValueError(f"Invalid TOML syntax in {self.toml_file_path}: {e}")
 
-
         self.meta_data = config['meta_data']       
         base_dir = self.meta_data['expt_dir']
         expt_name = self.meta_data['name']
@@ -62,7 +61,6 @@ class ExperimentBuilder():
         except Exception as e:
             raise RuntimeError(f"Not able to write to {expt_config_path}: {e}")
 
-        
         if self._is_hyperparameter_sweep():
             self.sweep = config['sweep']
             self.run_on_gpu = self.sweep['run_on_gpu']
@@ -147,8 +145,11 @@ class ExperimentBuilder():
     
     def _apply_sampled_params(self, config, sampled_params):
         """Apply sampled hyperparameters to the appropriate sections of the config"""
-        valid_params = {'lr', 'weight_decay', 'batch_size', 'hidden_dim', 'dropout', 'label_smoothing'}
-        
+        valid_params = {
+            'lr', 'weight_decay', 'batch_size', 'hidden_dim', 'dropout', 'label_smoothing',
+            'step_size', 'gamma', 'factor', 'patience_scheduler', 'mode', 'threshold', 
+            'T_max', 'eta_min'
+        }
 
         for param, value in sampled_params.items():
             if param not in valid_params:
@@ -164,8 +165,16 @@ class ExperimentBuilder():
                 config['model']['model_hyperparams'][param] = value
             elif param == 'label_smoothing':
                 config['criterion']['criterion_params']['label_smoothing'] = value
-
-
+            elif param in ['step_size', 'gamma', 'factor', 'mode', 'threshold', 'T_max', 'eta_min']:
+                # Scheduler parameters
+                if 'scheduler_params' not in config['optimizer']:
+                    config['optimizer']['scheduler_params'] = {}
+                config['optimizer']['scheduler_params'][param] = value
+            elif param == 'patience_scheduler':
+                # Map patience_scheduler to patience for scheduler config
+                if 'scheduler_params' not in config['optimizer']:
+                    config['optimizer']['scheduler_params'] = {}
+                config['optimizer']['scheduler_params']['patience'] = value
 
     def _build_model_config(self, model_section):
         """Build model config dic"""
@@ -203,10 +212,36 @@ class ExperimentBuilder():
             config['optimizer_weights'] = None
             print(f"{'\033[33m'}NOT loading optimizer saved state{'\033[0m'}, No 'optimizer_weights' path found.")
 
-        
-        for key, value in optimizer_section.items():
-            if key not in ['optimizer', 'optimizer_weights']:
-                config['optimizer_params'][key] = value
+        # Handle scheduler configuration
+        if 'scheduler' in optimizer_section and optimizer_section['scheduler'] is not None and optimizer_section['scheduler'] != '':
+            config['scheduler'] = optimizer_section['scheduler']
+            config['scheduler_params'] = {}
+            
+            # Extract scheduler parameters
+            for key, value in optimizer_section.items():
+                if key not in ['optimizer', 'optimizer_weights', 'scheduler']:
+                    # Check if this is a scheduler parameter or optimizer parameter
+                    scheduler_params = {
+                        'step_size', 'gamma', 'factor', 'patience', 'mode', 'threshold',
+                        'T_max', 'eta_min', 'milestones', 'last_epoch', 'verbose',
+                        'cooldown', 'min_lr', 'eps'
+                    }
+                    
+                    if key in scheduler_params:
+                        config['scheduler_params'][key] = value
+                    else:
+                        config['optimizer_params'][key] = value
+            
+            print(f"{'\033[32m'}Scheduler configured{'\033[0m'}: {optimizer_section['scheduler']}")
+        else:
+            config['scheduler'] = None
+            config['scheduler_params'] = {}
+            print(f"{'\033[33m'}No scheduler configured{'\033[0m'}")
+            
+            # All remaining parameters go to optimizer
+            for key, value in optimizer_section.items():
+                if key not in ['optimizer', 'optimizer_weights', 'scheduler']:
+                    config['optimizer_params'][key] = value
         
         return config
     

@@ -11,7 +11,7 @@ class SaveMode(Enum):
     JUST_MODEL_AND_METRICS = auto()
 
 class Train_Loop():
-    def __init__(self, save_dir, epochs, device='cpu', plot_freq=3, autosave_freq=10, patience=10, scheduler=None):
+    def __init__(self, save_dir, epochs, device='cpu', plot_freq=3, autosave_freq=10, patience=10):
         """
         Initializes a new TrainLoop instance.
 
@@ -31,7 +31,7 @@ class Train_Loop():
         self.save_dir = save_dir
         self.epochs = epochs
         self.curr_epoch = 0 
-        self.scheduler = scheduler
+        self.scheduler = None
 
         os.mkdir(self.save_dir)
 
@@ -65,6 +65,9 @@ class Train_Loop():
         self.train_f1 = BinaryF1Score().to(device)
         self.dev_f1 = BinaryF1Score().to(device)
         self.test_f1 = BinaryF1Score().to(device)
+
+    def set_scheduler(self, scheduler):
+        self.scheduler = scheduler
 
     def train(self, model, optimizer, criterion, train_loader, dev_loader, test_loader=None):
         assert not self.has_run, "Training loop already executed. Create new instance."
