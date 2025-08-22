@@ -1,25 +1,25 @@
-from shared_utils import *
+from utils import *
 import numpy as np
 import os
 
 # K-FOLD SPECIFIC CONSTANTS
-PARTICIPANT_IDS = [1, 3, 6, 7, 10]  # List of participant IDs to include
-NUM_FOLDS = 5  # Number of folds for cross-validation
-KFOLD_BASE_DIR = '/home/kuba/Desktop/k-fold'  # Base directory containing fold subdirectories
+PARTICIPANT_IDS = [1,2,3,4,5,6,7]  # List of participant IDs to include
+NUM_FOLDS = 7  # Number of folds for cross-validation
+KFOLD_BASE_DIR = '/home/kuba/projects/puff/paper00/experiments/03-k-fold'  # Base directory containing fold subdirectories
 
 # Configuration constants
-TRAIN_PERCENT = 0.6  # Percentage for training set (applied to non-test participants)
+TRAIN_PERCENT = 0.7  # Percentage for training set (applied to non-test participants)
 DEV_PERCENT = 1 - TRAIN_PERCENT
 
 # Create configuration
 config = create_base_config(
     target_labels=['puff', 'puffs'],
-    window_size=256,
-    step_size=256,
-    use_gyro=False,
+    window_size=1024,
+    step_size=1024,
+    use_gyro=True,
     random_seed=70,
-    percent_negative_windows=0.5,
-    threshold_gap_minutes=30,
+    percent_negative_windows=0.8,
+    threshold_gap_minutes=5,
     label_value=1,
     resample=False
 )
@@ -127,7 +127,7 @@ def save_fold_config(fold_num, train_ids, dev_ids, test_ids, save_dir):
 
 def process_fold(fold_num, train_ids, dev_ids, test_ids):
     """Process a single fold."""
-    print(f"\n\nProcessing fold {fold_num}/{NUM_FOLDS}...")
+    print(f"\n\nProcessing fold {fold_num}/{NUM_FOLDS-1}...")
     print(f"TRAIN ids: {train_ids}")
     print(f"DEV ids: {dev_ids}")
     print(f"TEST ids: {test_ids}")

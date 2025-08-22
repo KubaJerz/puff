@@ -236,12 +236,18 @@ patience = 15
 ```
 
 ### 3. Setup data
+Create datasets using the appropriate data preparation script:
+Basic experiments:
 
-For most of the basic experiments you just need to go to the data scripts then use the script you want (across participltes, across sessioons, etc.) And just point it to save the `experiment/data/`
+- Participant-level splits: python 00participant_level.py
+- Session-level splits: python 01session_level.py
+- K-fold cross-validation: python 02kfold_data_prep.py
 
-- For k-fold use the: "k-fold" data script
-- For one file Finetune/Customis eus eht ecorrect script
-- For f-fold finetune if we make data its self
+Configuration:
+
+- Update SAVE_DIR in each script to point to your experiment/data/ directory
+
+Output: Each script saves PyTorch tensors (.pt files) and configuration (.toml files) ready for training.
 
 ### 4. Send the .toml file to the right script
 

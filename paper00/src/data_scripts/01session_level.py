@@ -1,22 +1,22 @@
-from shared_utils import *
+from utils import *
 from sklearn.model_selection import train_test_split
 import numpy as np
 
 # Configuration constants
-TRAIN_PERCENT = 0.8
+TRAIN_PERCENT = 0.6
 DEV_PERCENT = 0.2
-TEST_PERCENT = 0  # No test set in this configuration
-SAVE_DIR = '/home/kuba/projects/puff/paper00/experiments/02/data'
+TEST_PERCENT = 0.2  # No test set in this configuration
+SAVE_DIR = '/home/kuba/projects/puff/paper00/experiments/01-sesh-split/data'
 
 # Create configuration
 config = create_base_config(
     target_labels={'puff', 'puffs'}, 
-    window_size=512,
-    step_size=512,
-    use_gyro=False,
+    window_size=1024,
+    step_size=1024,
+    use_gyro=True,
     random_seed=70,
     percent_negative_windows=0.8,
-    threshold_gap_minutes=30,
+    threshold_gap_minutes=5,
     label_value=1
 )
 

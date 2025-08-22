@@ -1,8 +1,8 @@
-from shared_utils import *
+from utils import *
 import numpy as np
 
 # Configuration constants
-PARTICIPANT_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+PARTICIPANT_IDS = [1, 2, 3, 4, 5, 6, 7]
 TRAIN_PERCENT = 0.6
 DEV_PERCENT = 0.2
 TEST_PERCENT = 1 - TRAIN_PERCENT - DEV_PERCENT

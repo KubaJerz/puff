@@ -402,7 +402,7 @@ class ModelEvaluator:
         if len(old_train) > 0 or len(old_dev) > 0:
             for ax in [ax1, ax2]:
                 ax.axvline(x=transition_point, color=self.theme.theme['accent'], 
-                          linestyle='--', linewidth=2, alpha=0.8, label='Metric Transition')
+                          linestyle='--', linewidth=2, alpha=0.8, label='Transition')
         
         # Styling
         for ax, title in zip([ax1, ax2], [f'Combined Training {data_type}', f'Combined Validation {data_type}']):

@@ -125,17 +125,34 @@ def get_participant_projects(participant_id):
         rows = cursor.fetchall()
     return [row[0] for row in rows]
 
-def load_data(raw_dataset_path, session_name, start_ns=None, stop_ns=None):
+def load_data(raw_dataset_path, session_name, start_ns=None, stop_ns=None, use_gyro=False):
     """Load accelerometer data for a session with optional time filtering."""
     try:
         session_path = os.path.join(raw_dataset_path, session_name.split('.')[0])
         accelerometer_path = os.path.join(session_path, 'accelerometer_data.csv')
         
-        df = pd.read_csv(accelerometer_path)
+        df_accel = pd.read_csv(accelerometer_path)
+
+        if 'accel_x' not in df_accel.columns:
+            df_accel.rename(columns={'x': 'accel_x', 'y': 'accel_y', 'z': 'accel_z'}, inplace=True)
+        else:
+            df_accel.rename(columns={'x_accel':'accel_x', 'y_accel':'accel_y', 'z_accel':'accel_y'}, inplace=True)
+
         
-        # Standardize column names
-        if 'accel_x' not in df.columns:
-            df.rename(columns={'x': 'accel_x', 'y': 'accel_y', 'z': 'accel_z'}, inplace=True)
+        if use_gyro:
+            gyroscope_path = os.path.join(session_path, 'gyroscope_data.csv')
+            df_gyro = pd.read_csv(gyroscope_path)
+
+            if 'gyro_x' not in df_gyro.columns:
+                df_gyro.rename(columns={'x': 'gyro_x', 'y': 'gyro_y', 'z': 'gyro_z'}, inplace=True)
+            else:
+                df_gyro.rename(columns={'x_gyro':'gyro_x', 'y_gyro':'gyro_y', 'z_gyro':'gyro_z'}, inplace=True)
+
+
+        if use_gyro:
+            df = pd.merge(df_accel, df_gyro, on='ns_since_reboot', how='inner')
+
+
         
         # Apply time filtering if provided
         if start_ns is not None and stop_ns is not None:
@@ -150,24 +167,15 @@ def load_data(raw_dataset_path, session_name, start_ns=None, stop_ns=None):
 
 def combine_sensor_data(session, project_path, use_gyro=False):
     """Legacy function name - calls load_data for compatibility."""
-    df = load_data(project_path, session['session_name'])
+    df = load_data(project_path, session['session_name'], start_ns=session['start_ns'], stop_ns=session['stop_ns'], use_gyro=use_gyro)
     
     if df.empty:
         return df
     
-    # Rename columns to match old format
-    if 'accel_x' in df.columns:
-        df = df.rename(columns={'accel_x': 'x_accel', 'accel_y': 'y_accel', 'accel_z': 'z_accel'})
-    
     # Ensure data types
-    for col in ['ns_since_reboot', 'x_accel', 'y_accel', 'z_accel']:
+    for col in ['ns_since_reboot', 'accel_x', 'accel_y', 'accel_z', 'gyro_x', 'gyro_y', 'gyro_z']:
         if col in df.columns:
             df[col] = df[col].astype(float)
-    
-    # Add gyroscope data if requested (implement as needed)
-    if use_gyro:
-        # Add gyroscope loading logic here if needed
-        pass
     
     return df.dropna()
 
@@ -243,10 +251,11 @@ def create_windows(df, window_size, step_size, use_gyro=False):
         return np.array([]), np.array([])
     
     if use_gyro:
-        feature_cols = ['x_accel', 'y_accel', 'z_accel', 'x_gyro', 'y_gyro', 'z_gyro']
+        feature_cols = ['accel_x', 'accel_y', 'accel_z', 'gyro_x', 'gyro_y', 'gyro_z']
     else:
-        feature_cols = ['x_accel', 'y_accel', 'z_accel']
+        feature_cols = ['accel_x', 'accel_y', 'accel_z']
         
+
     X_data = df[feature_cols].values
     y_data = df['label'].values
     
@@ -537,49 +546,3 @@ def validate_config(config):
     
     if not (0 <= config.get('percent_negative_windows', 1.0) <= 1.0):
         raise ValueError("percent_negative_windows must be between 0 and 1")
-
-# Legacy GitHub utils.py compatibility functions
-def make_windowed_dataset_from_sessions(sessions, window_size, window_stride, raw_dataset_path, labeling):
-    """Legacy function for compatibility with existing make_dataset.py."""
-    X = []
-    y = []
-
-    for session in sessions:
-        session_name = session['session_name']
-        start_ns = session.get('start_ns')
-        stop_ns = session.get('stop_ns')
-        bouts = [b for b in session['bouts'] if b['label'] == labeling]
-
-        df = load_data(raw_dataset_path, session_name, start_ns, stop_ns)
-        if df.empty:
-            continue
-            
-        df['label'] = 0
-
-        for bout in bouts:
-            start = bout['start']
-            end = bout['end']
-            df.loc[(df['ns_since_reboot'] >= start) & (df['ns_since_reboot'] <= end), 'label'] = 1
-
-        if 'accel_x' not in df.columns or 'accel_y' not in df.columns or 'accel_z' not in df.columns:
-            df.rename(columns={'x': 'accel_x', 'y': 'accel_y', 'z': 'accel_z'}, inplace=True)
-
-        data = torch.tensor(df[['accel_x', 'accel_y', 'accel_z','label']].values, dtype=torch.float32)
-
-        if data.shape[0] < window_size:
-            # Zero pad the data to window size
-            padding_length = window_size - data.shape[0]
-            padding = torch.zeros((padding_length, data.shape[1]), dtype=torch.float32)
-            data = torch.cat([data, padding], dim=0)
-            print(f"Zero-padded session {session_name} from {data.shape[0] - padding_length} to {data.shape[0]} samples")
-
-        windowed_data = data.unfold(dimension=0,size=window_size,step=window_stride)
-        X.append(windowed_data[:,:-1,:])
-        y.append(windowed_data[:,-1,:])
-
-    if not X:
-        return torch.empty(0), torch.empty(0)
-        
-    X = torch.cat(X)
-    y = (~(torch.cat(y) == 0).all(axis=1)).float()
-    return X, y

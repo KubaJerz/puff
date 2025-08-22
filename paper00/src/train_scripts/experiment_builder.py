@@ -228,7 +228,7 @@ class ExperimentBuilder():
             'train_path': data_section['train_path'],
             'dev_path': data_section['dev_path'],
             'test_path': data_section.get('test_path', None),
-            'batch_size': data_section['batch_size'],
+            'batch_size': data_section.get('batch_size', None),
             'use_test': data_section.get('use_test', True)
         }
     
