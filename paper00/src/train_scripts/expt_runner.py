@@ -46,7 +46,11 @@ class Expt_Runner():
                 train_run_config = self.sub_runs_list.pop(0)
 
                 train_loop =  Train_Loop(save_dir=f'{self.expt_dir}/{run_id}', epochs=train_run_config['epochs'], device=f'cuda:{gpu_idx}', plot_freq=train_run_config['plot_freq'], patience=train_run_config['patience'])
-                model, optimizer, criterion, train_loader, dev_loader, test_loader = self._setup_train_objs(train_run_config)
+                model, optimizer, criterion, train_loader, dev_loader, test_loader, scheduler = self._setup_train_objs(train_run_config)
+                
+                # Set scheduler in train loop
+                train_loop.set_scheduler(scheduler)
+                
                 self._save_train_run_config(config=train_run_config, save_dir=f'{self.expt_dir}/{run_id}')
                 p = mp.Process(target=train_loop.train, args=(model, optimizer, criterion, train_loader, dev_loader, test_loader))
                 p.start()
@@ -59,13 +63,16 @@ class Expt_Runner():
 
             processes = []
 
-
     def _cpu_run(self):
         for i, train_run_config in enumerate(self.sub_runs_list):
             train_loop =  Train_Loop(save_dir=f'{self.expt_dir}/{i}', epochs=train_run_config['epochs'], device='cpu', plot_freq=10)
-            model, optimizer, criterion, train_loader, dev_loader, test_loader = self._setup_train_objs(train_run_config)
-            train_loop.train(model, optimizer, criterion, train_loader, dev_loader, test_loader)
+            model, optimizer, criterion, train_loader, dev_loader, test_loader, scheduler = self._setup_train_objs(train_run_config)
+            
+            # Set scheduler in train loop
+            train_loop.set_scheduler(scheduler)
+            
 
+            train_loop.train(model, optimizer, criterion, train_loader, dev_loader, test_loader)
 
     def _check_gpu_availability(self):
         if torch.cuda.is_available():
@@ -83,7 +90,6 @@ class Expt_Runner():
         except Exception as e:
             raise RuntimeError(f"Not able to write to {toml_file_path}: {e}")
 
-
     def _load_class_from_str(self, path_str):
         """
         take something like 'torch.nn.CrossEntropyLoss' and returns the class obj
@@ -94,13 +100,11 @@ class Expt_Runner():
 
     def _setup_train_objs(self, train_run_config):
         model = self._setup_model(train_run_config["model"])
-        optimizer = self._setup_optimizer(train_run_config["optimizer"], model.parameters())
+        optimizer, scheduler = self._setup_optimizer(train_run_config["optimizer"], model.parameters())
         criterion = self._setup_criterion(train_run_config["criterion"])
         train_loader, dev_loader, test_loader = self._setup_loaders(train_run_config["data"])
 
-        return model, optimizer, criterion, train_loader, dev_loader, test_loader
-
-
+        return model, optimizer, criterion, train_loader, dev_loader, test_loader, scheduler
 
     def _setup_model(self, model_config):
         model_path = model_config.get("model_path")
@@ -188,7 +192,6 @@ class Expt_Runner():
         except Exception as e:
             print(f"{'\033[31m'}Unexpected error in loading old metrics: {e}{'\033[0m'}")
 
-
     def _setup_optimizer(self, opt_config, model_params):
         opt_class_str = opt_config["optimizer"]
         opt_params = opt_config.get("optimizer_params", {})
@@ -200,15 +203,62 @@ class Expt_Runner():
             weights_path = opt_config["optimizer_weights"]
             print(f"{'\033[32m'}Loading optimizer saved state{'\033[0m'}, from {weights_path}")
             try:
-                state_dict = torch.load(weights_path, weights_only=True)
-                optimizer.load_state_dict(state_dict)
+                checkpoint = torch.load(weights_path, weights_only=True)
+                if 'optimizer_state_dict' in checkpoint:
+                    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                else:
+                    optimizer.load_state_dict(checkpoint)
             except (FileNotFoundError, RuntimeError, Exception) as e:
                 raise RuntimeError(f"Failed to load optimizer state from {weights_path}: {e}")
         else:
             print(f"{'\033[33m'}NOT loading optimizer saved state{'\033[0m'}, No 'optimizer_weights' path found.")
 
-        return optimizer
+        # Setup scheduler if specified
+        scheduler = None
+        if opt_config.get("scheduler") is not None:
+            scheduler = self._setup_scheduler(opt_config, optimizer)
+            
+            # Load scheduler state if loading optimizer weights from checkpoint
+            if opt_config.get("optimizer_weights") is not None and scheduler is not None:
+                try:
+                    checkpoint = torch.load(opt_config["optimizer_weights"], weights_only=True)
+                    if 'scheduler_state_dict' in checkpoint:
+                        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                        print(f"{'\033[32m'}Loading scheduler saved state{'\033[0m'}, from {opt_config['optimizer_weights']}")
+                    else:
+                        print(f"{'\033[33m'}No scheduler state found in checkpoint{'\033[0m'}")
+                except Exception as e:
+                    print(f"{'\033[31m'}Failed to load scheduler state: {e}{'\033[0m'}")
 
+        return optimizer, scheduler
+
+    def _setup_scheduler(self, opt_config, optimizer):
+        """
+        Setup learning rate scheduler from configuration.
+        """
+        scheduler_class_str = opt_config["scheduler"]
+        scheduler_params = opt_config.get("scheduler_params", {})
+        
+        try:
+            if '/' in scheduler_class_str:  # Custom scheduler from file path
+                module_dir = os.path.dirname(scheduler_class_str)
+                module_name, scheduler_class_name = os.path.basename(scheduler_class_str).rsplit('.', 1)
+                sys.path.insert(0, module_dir)
+                module = importlib.import_module(module_name)
+                scheduler_class = getattr(module, scheduler_class_name)
+            else:
+                # Built-in PyTorch scheduler
+                scheduler_class = self._load_class_from_str(scheduler_class_str)
+            
+            # Create scheduler instance
+            scheduler = scheduler_class(optimizer, **scheduler_params)
+            print(f"{'\033[32m'}Scheduler configured{'\033[0m'}: {scheduler_class_str} with params {scheduler_params}")
+            return scheduler
+            
+        except (ImportError, AttributeError, TypeError) as e:
+            print(f"{'\033[31m'}Failed to setup scheduler {scheduler_class_str}: {e}{'\033[0m'}")
+            print(f"{'\033[33m'}Continuing without scheduler{'\033[0m'}")
+            return None
 
     def _setup_criterion(self, crit_config):
         crit_class_str = crit_config["criterion"]
@@ -223,7 +273,6 @@ class Expt_Runner():
         else:
             crit_class = self._load_class_from_str(crit_class_str)
         return crit_class(**crit_params)
-
 
     def _setup_loaders(self, data_config):
         batch_size = data_config.get("batch_size")
@@ -251,5 +300,5 @@ class Expt_Runner():
         
 
 if __name__ == '__main__':
-    expt_runner = Expt_Runner(sub_runs_list=None)
+    expt_runner = Expt_Runner(expt_dir=None, sub_runs_list=None, run_on_gpu=False)
     print(expt_runner.available_gpu_list)
