@@ -13,6 +13,7 @@ import sys
 import importlib
 import os
 from scipy.ndimage import binary_closing
+from datetime import datetime
 
 # ============================================================================
 # CONFIGURATION
@@ -384,6 +385,147 @@ def filter_by_density(y_pred, y_true, search_time_seconds, signal_hz, min_puffs_
     
     return filtered_pred, removed_count, len(pred_regions)
 
+
+
+def write_evaluation_results(initial_metrics, filtered_metrics, removed_count, total_count):
+    """
+    Write evaluation results and configuration to a markdown file.
+    
+    Args:
+        initial_metrics (dict): Initial evaluation metrics
+        filtered_metrics (dict): Filtered evaluation metrics  
+        removed_count (int): Number of puffs removed by density filtering
+        total_count (int): Total number of predicted puffs before filtering
+    """
+    # Get directory from model weights path
+    model_dir = os.path.dirname(MODEL_WEIGHTS_PATH)
+    
+    # Create filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"puff_evaluation_results_{timestamp}.md"
+    filepath = os.path.join(model_dir, filename)
+    
+    # Prepare content
+    content = f"""# Puff-Level F1 Score Evaluation Results
+
+**Evaluation Date:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+## Configuration Parameters
+
+### Model Configuration
+- **Model Weights:** `{MODEL_WEIGHTS_PATH}`
+- **Model Definition:** `{MODEL_DEFINITION_PATH}`
+- **Test Data:** `{DATA_PATH}`
+- **Random Seed:** `{SEED}`
+
+### Processing Parameters
+- **Confidence Threshold:** `{CONFIDENCE_THRESHOLD}`
+- **Binary Closing Size:** `{BINARY_CLOSING_SIZE}` samples
+- **Batch Size:** `{BATCH_SIZE}`
+
+### Signal Parameters
+- **Signal Frequency:** `{SIGNAL_HZ}` Hz
+- **Puff Search Time Window:** `±{PUFF_SEARCH_TIME_SECONDS}` seconds (`±{int(PUFF_SEARCH_TIME_SECONDS * SIGNAL_HZ)}` samples)
+- **Minimum Puffs in Range:** `{MIN_PUFFS_IN_RANGE}`
+
+### Evaluation Parameters
+- **Overlap Threshold:** `{OVERLAP_THRESHOLD}`
+
+## Initial Results (Before Density Filtering)
+
+| Metric | Value |
+|--------|-------|
+| **Ground Truth Puffs** | {initial_metrics['total_true_puffs']} |
+| **Predicted Puffs** | {initial_metrics['total_predicted_puffs']} |
+| **True Positives** | {initial_metrics['true_positives']} |
+| **False Positives** | {initial_metrics['false_positives']} |
+| **False Negatives** | {initial_metrics['false_negatives']} |
+| **Precision** | {initial_metrics['precision']:.4f} |
+| **Recall** | {initial_metrics['recall']:.4f} |
+| **F1 Score** | {initial_metrics['f1_score']:.4f} |
+| **Avg True Puff Duration** | {initial_metrics['avg_true_duration']:.2f}s |
+| **Avg Pred Puff Duration** | {initial_metrics['avg_pred_duration']:.2f}s |
+
+## Density Filtering Results
+
+### Filtering Impact
+- **Puffs Removed:** {removed_count}/{total_count} ({(removed_count/total_count*100 if total_count > 0 else 0):.1f}%)
+- **Filtering Criterion:** Minimum {MIN_PUFFS_IN_RANGE} puffs within ±{PUFF_SEARCH_TIME_SECONDS}s window
+
+### Final Results (After Density Filtering)
+
+| Metric | Value |
+|--------|-------|
+| **Ground Truth Puffs** | {filtered_metrics['total_true_puffs']} |
+| **Predicted Puffs** | {filtered_metrics['total_predicted_puffs']} |
+| **True Positives** | {filtered_metrics['true_positives']} |
+| **False Positives** | {filtered_metrics['false_positives']} |
+| **False Negatives** | {filtered_metrics['false_negatives']} |
+| **Precision** | {filtered_metrics['precision']:.4f} |
+| **Recall** | {filtered_metrics['recall']:.4f} |
+| **F1 Score** | {filtered_metrics['f1_score']:.4f} |
+| **Avg True Puff Duration** | {filtered_metrics['avg_true_duration']:.2f}s |
+| **Avg Pred Puff Duration** | {filtered_metrics['avg_pred_duration']:.2f}s |
+
+## Performance Comparison
+
+| Metric | Initial | Filtered | Change |
+|--------|---------|----------|--------|
+| **Precision** | {initial_metrics['precision']:.4f} | {filtered_metrics['precision']:.4f} | {(filtered_metrics['precision'] - initial_metrics['precision']):+.4f} |
+| **Recall** | {initial_metrics['recall']:.4f} | {filtered_metrics['recall']:.4f} | {(filtered_metrics['recall'] - initial_metrics['recall']):+.4f} |
+| **F1 Score** | {initial_metrics['f1_score']:.4f} | {filtered_metrics['f1_score']:.4f} | {(filtered_metrics['f1_score'] - initial_metrics['f1_score']):+.4f} |
+| **Predicted Puffs** | {initial_metrics['total_predicted_puffs']} | {filtered_metrics['total_predicted_puffs']} | {filtered_metrics['total_predicted_puffs'] - initial_metrics['total_predicted_puffs']} |
+
+## Summary
+
+### Key Findings
+- **Best F1 Score:** {max(initial_metrics['f1_score'], filtered_metrics['f1_score']):.4f} ({'Initial' if initial_metrics['f1_score'] > filtered_metrics['f1_score'] else 'Filtered'})
+- **Filtering Effect:** {"Improved" if filtered_metrics['f1_score'] > initial_metrics['f1_score'] else "Reduced" if filtered_metrics['f1_score'] < initial_metrics['f1_score'] else "No change in"} F1 score by {abs(filtered_metrics['f1_score'] - initial_metrics['f1_score']):.4f}
+- **Precision vs Recall Trade-off:** {"Precision-favoring" if filtered_metrics['precision'] > filtered_metrics['recall'] else "Recall-favoring" if filtered_metrics['recall'] > filtered_metrics['precision'] else "Balanced"} (Final: P={filtered_metrics['precision']:.3f}, R={filtered_metrics['recall']:.3f})
+
+### Model Performance Assessment
+"""
+
+    # Add performance assessment based on F1 score
+    f1 = filtered_metrics['f1_score']
+    if f1 >= 0.9:
+        assessment = "**Excellent** - Very high detection accuracy"
+    elif f1 >= 0.8:
+        assessment = "**Good** - High detection accuracy with room for improvement"
+    elif f1 >= 0.7:
+        assessment = "**Moderate** - Reasonable detection but significant improvement needed"
+    elif f1 >= 0.5:
+        assessment = "**Poor** - Low detection accuracy, major issues present"
+    else:
+        assessment = "**Very Poor** - Detection failing, requires significant changes"
+    
+    content += f"- **Overall Performance:** {assessment}\n"
+    
+    # Add recommendations
+    content += "\n### Recommendations\n"
+    
+    if filtered_metrics['precision'] < 0.7:
+        content += "- **Reduce False Positives:** Consider increasing confidence threshold or improving model specificity\n"
+    if filtered_metrics['recall'] < 0.7:
+        content += "- **Reduce False Negatives:** Consider decreasing confidence threshold or improving model sensitivity\n"
+    if abs(filtered_metrics['precision'] - filtered_metrics['recall']) > 0.2:
+        content += "- **Balance Precision/Recall:** Current model shows significant bias toward " + ("precision" if filtered_metrics['precision'] > filtered_metrics['recall'] else "recall") + "\n"
+    if removed_count > total_count * 0.5:
+        content += "- **Review Density Filtering:** High removal rate suggests filtering may be too aggressive\n"
+    
+    content += f"\n---\n*Generated by puff evaluation script on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n"
+    
+    # Write to file
+    try:
+        os.makedirs(model_dir, exist_ok=True)
+        with open(filepath, 'w') as f:
+            f.write(content)
+        print(f"✓ Evaluation results saved to: {filepath}")
+        return filepath
+    except Exception as e:
+        print(f"❌ Failed to save results: {e}")
+        return None
+
 # ============================================================================
 # MAIN PIPELINE
 # ============================================================================
@@ -430,6 +572,8 @@ def main():
         print(f"Precision change: {filtered_metrics['precision'] - initial_metrics['precision']:+.4f}")
         print(f"Recall change: {filtered_metrics['recall'] - initial_metrics['recall']:+.4f}")
         print("=" * 50)
+
+        write_evaluation_results(initial_metrics, filtered_metrics, removed_count, total_count)
         
         return {'initial': initial_metrics, 'filtered': filtered_metrics}
         
